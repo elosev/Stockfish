@@ -488,7 +488,7 @@ ifeq ($(COMP),ndk)
 		endif
 	endif
 	ifeq ($(arch),armv8)
-		CXX=aarch64-linux-android33-clang++
+		CXX=aarch64-linux-android21-clang++
 		ifneq ($(shell which aarch64-linux-android-strip 2>/dev/null),)
 			STRIP=aarch64-linux-android-strip
 		else
@@ -499,12 +499,12 @@ ifeq ($(COMP),ndk)
 									 x86-64-vnni512 x86-64-vnni256 x86-64-avx512 x86-64-avxvnni x86-64-bmi2 \
 									 x86-64-avx2 x86-64-sse41-popcnt x86-64-modern x86-64-ssse3 x86-64-sse3-popcnt \
 									 x86-64))
-		CXX=x86_64-linux-android33-clang++
+		CXX=x86_64-linux-android21-clang++
 		STRIP=llvm-strip
 	endif
 ifeq ($(ARCH), $(filter $(ARCH), \
                  x86-32-sse41-popcnt x86-32-sse2 x86-32))
- 		CXX=i686-linux-android33-clang++
+ 		CXX=i686-linux-android21-clang++
 		STRIP=llvm-strip
 	endif
  	LDFLAGS += -static-libstdc++ -pie -lm -latomic
@@ -584,7 +584,9 @@ ifeq ($(optimize),yes)
 
 	ifeq ($(KERNEL),Darwin)
 		ifeq ($(comp),$(filter $(comp),clang icx))
-			CXXFLAGS += -mdynamic-no-pic
+			ifneq ($(COMP),ndk)
+			  CXXFLAGS += -mdynamic-no-pic
+		  endif
 		endif
 
 		ifeq ($(comp),gcc)
@@ -996,7 +998,7 @@ config-sanity: net
 	@test "$(vnni512)" = "yes" || test "$(vnni512)" = "no"
 	@test "$(neon)" = "yes" || test "$(neon)" = "no"
 	@test "$(comp)" = "gcc" || test "$(comp)" = "icx" || test "$(comp)" = "mingw" || test "$(comp)" = "clang" \
-	|| test "$(comp)" = "armv7a-linux-androideabi33-clang"  || test "$(comp)" = "aarch64-linux-android33-clang"
+	|| test "$(comp)" = "armv7a-linux-androideabi33-clang"  || test "$(comp)" = "aarch64-linux-android21-clang"
 
 $(EXE): $(OBJS)
 	+$(CXX) -o $@ $(OBJS) $(LDFLAGS)
