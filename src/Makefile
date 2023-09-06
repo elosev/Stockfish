@@ -463,8 +463,10 @@ ifeq ($(COMP),clang)
 endif
 
 ifeq ($(KERNEL),Darwin)
-	CXXFLAGS += -mmacosx-version-min=10.14
-	LDFLAGS += -mmacosx-version-min=10.14
+	ifneq ($(COMP), ndk) 
+	  CXXFLAGS += -mmacosx-version-min=10.14
+	  LDFLAGS += -mmacosx-version-min=10.14
+  endif 
 	ifneq ($(arch),any)
 		CXXFLAGS += -arch $(arch)
 		LDFLAGS += -arch $(arch)
