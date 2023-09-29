@@ -73,22 +73,23 @@ struct SetRange {
 /// and created as the last one, so the GUI should send the options in the same
 /// order in which have been defined.
 
+struct ThreadPool;
 class Tune {
 
   using PostUpdate = void (); // Post-update function
 
-  Tune() { read_results(); }
   Tune(const Tune&) = delete;
   void operator=(const Tune&) = delete;
   void read_results();
 
-  static Tune& instance() { static Tune t; return t; } // Singleton
-
   // Use polymorphism to accommodate Entry of different types in the same vector
   struct EntryBase {
+    EntryBase(Tune *_tune): tune(_tune) {}
     virtual ~EntryBase() = default;
     virtual void init_option() = 0;
     virtual void read_option() = 0;
+
+    Tune *tune;
   };
 
   template<typename T>
@@ -101,7 +102,7 @@ class Tune {
                   || std::is_same<T, Score>::value
                   || std::is_same<T, PostUpdate>::value, "Parameter type not supported!");
 
-    Entry(const std::string& n, T& v, const SetRange& r) : name(n), value(v), range(r) {}
+    Entry(Tune *tune, const std::string& n, T& v, const SetRange& r) : EntryBase(tune), name(n), value(v), range(r) {}
     void operator=(const Entry&) = delete; // Because 'value' is a reference
     void init_option() override;
     void read_option() override;
@@ -141,13 +142,18 @@ class Tune {
   std::vector<std::unique_ptr<EntryBase>> list;
 
 public:
+  Tune(ThreadPool *threads): _threads(threads) { read_results(); }
+
   template<typename... Args>
-  static int add(const std::string& names, Args&&... args) {
-    return instance().add(SetDefaultRange, names.substr(1, names.size() - 2), args...); // Remove trailing parenthesis
+  int add(const std::string& names, Args&&... args) {
+    return add(SetDefaultRange, names.substr(1, names.size() - 2), args...); // Remove trailing parenthesis
   }
-  static void init() { for (auto& e : instance().list) e->init_option(); read_options(); } // Deferred, due to UCI::Options access
-  static void read_options() { for (auto& e : instance().list) e->read_option(); }
-  static bool update_on_last;
+  void init() { for (auto& e : list) e->init_option(); read_options(); } // Deferred, due to UCI::Options access
+  void read_options() { for (auto& e : list) e->read_option(); }
+  ThreadPool *threads() { return _threads; }
+  bool update_on_last;
+private:
+  ThreadPool *_threads;
 };
 
 // Some macro magic :-) we define a dummy int variable that compiler initializes calling Tune::add()

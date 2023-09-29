@@ -60,9 +60,9 @@ void TTEntry::save(Key k, Value v, bool pv, Bound b, Depth d, Move m, Value ev) 
 /// measured in megabytes. Transposition table consists of a power of 2 number
 /// of clusters and each cluster consists of ClusterSize number of TTEntry.
 
-void TranspositionTable::resize(size_t mbSize) {
+void TranspositionTable::resize(size_t mbSize, ThreadPool *threads) {
 
-  Threads.main()->wait_for_search_finished();
+  threads->main()->wait_for_search_finished();
 
   aligned_large_pages_free(table);
 

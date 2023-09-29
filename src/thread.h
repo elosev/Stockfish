@@ -37,6 +37,8 @@ namespace Stockfish {
 /// pointer to an entry its life time is unlimited and we don't have
 /// to care about someone changing the entry under our feet.
 
+struct ThreadPool;
+class TimeManagement;
 class Thread {
 
   std::mutex mutex;
@@ -44,9 +46,9 @@ class Thread {
   size_t idx;
   bool exit = false, searching = true; // Set before starting std::thread
   NativeThread stdThread;
-
+  ThreadPool *threads;
 public:
-  explicit Thread(size_t);
+  explicit Thread(ThreadPool*, size_t);
   virtual ~Thread();
   virtual void search();
   void clear();
@@ -54,6 +56,7 @@ public:
   void start_searching();
   void wait_for_search_finished();
   size_t id() const { return idx; }
+  ThreadPool* get_threads() { return this->threads; }
 
   size_t pvIdx, pvLast;
   std::atomic<uint64_t> nodes, tbHits, bestMoveChanges;
@@ -97,6 +100,7 @@ struct MainThread : public Thread {
 
 struct ThreadPool {
 
+  ThreadPool(TimeManagement *_time) : time(_time) {}
   void start_thinking(Position&, StateListPtr&, const Search::LimitsType&, bool = false);
   void clear();
   void set(size_t);
@@ -117,9 +121,12 @@ struct ThreadPool {
   auto size() const noexcept { return threads.size(); }
   auto empty() const noexcept { return threads.empty(); }
 
+  TimeManagement* get_time() { return this->time; }
+
 private:
   StateListPtr setupStates;
   std::vector<Thread*> threads;
+  TimeManagement *time;
 
   uint64_t accumulate(std::atomic<uint64_t> Thread::* member) const {
 
@@ -130,7 +137,6 @@ private:
   }
 };
 
-extern ThreadPool Threads;
 
 } // namespace Stockfish
 

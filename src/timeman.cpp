@@ -26,7 +26,6 @@
 
 namespace Stockfish {
 
-TimeManagement Time; // Our global time management object
 
 
 /// TimeManagement::init() is called at the beginning of the search and calculates

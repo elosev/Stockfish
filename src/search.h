@@ -28,6 +28,7 @@
 namespace Stockfish {
 
 class Position;
+struct ThreadPool;
 
 namespace Search {
 
@@ -106,8 +107,8 @@ struct LimitsType {
 
 extern LimitsType Limits;
 
-void init();
-void clear();
+void init(ThreadPool *threads);
+void clear(ThreadPool *threads);
 
 } // namespace Search
 

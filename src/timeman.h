@@ -33,8 +33,8 @@ public:
   void init(Search::LimitsType& limits, Color us, int ply);
   TimePoint optimum() const { return optimumTime; }
   TimePoint maximum() const { return maximumTime; }
-  TimePoint elapsed() const { return Search::Limits.npmsec ?
-                                     TimePoint(Threads.nodes_searched()) : now() - startTime; }
+  TimePoint elapsed(ThreadPool *threads) const { return Search::Limits.npmsec ?
+                                     TimePoint(threads->nodes_searched()) : now() - startTime; }
 
   int64_t availableNodes; // When in 'nodes as time' mode
 
@@ -44,7 +44,6 @@ private:
   TimePoint maximumTime;
 };
 
-extern TimeManagement Time;
 
 } // namespace Stockfish
 

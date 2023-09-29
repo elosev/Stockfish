@@ -28,13 +28,12 @@
 
 namespace Stockfish {
 
-ThreadPool Threads; // Global object
 
 
 /// Thread constructor launches the thread and waits until it goes to sleep
 /// in idle_loop(). Note that 'searching' and 'exit' should be already set.
 
-Thread::Thread(size_t n) : idx(n), stdThread(&Thread::idle_loop, this) {
+Thread::Thread(ThreadPool *_threads, size_t n) : idx(n), stdThread(&Thread::idle_loop, this), threads(_threads) {
 
   wait_for_search_finished();
 }
@@ -134,17 +133,17 @@ void ThreadPool::set(size_t requested) {
 
   if (requested > 0)   // create new thread(s)
   {
-      threads.push_back(new MainThread(0));
+      threads.push_back(new MainThread(this, 0));
 
       while (threads.size() < requested)
-          threads.push_back(new Thread(threads.size()));
+          threads.push_back(new Thread(this, threads.size()));
       clear();
 
       // Reallocate the hash with the new threadpool size
-      TT.resize(size_t(Options["Hash"]));
+      TT.resize(size_t(Options["Hash"]), this);
 
       // Init thread number dependent search params.
-      Search::init();
+      Search::init(this);
   }
 }
 

@@ -49,7 +49,7 @@ namespace {
   // the initial position ("startpos") and then makes the moves given in the following
   // move list ("moves").
 
-  void position(Position& pos, istringstream& is, StateListPtr& states) {
+  void position(Position& pos, istringstream& is, StateListPtr& states, ThreadPool *threads) {
 
     Move m;
     string token, fen;
@@ -68,7 +68,7 @@ namespace {
         return;
 
     states = StateListPtr(new std::deque<StateInfo>(1)); // Drop the old state and create a new one
-    pos.set(fen, Options["UCI_Chess960"], &states->back(), Threads.main());
+    pos.set(fen, Options["UCI_Chess960"], &states->back(), threads->main());
 
     // Parse the move list, if any
     while (is >> token && (m = UCI::to_move(pos, token)) != MOVE_NONE)
@@ -81,11 +81,11 @@ namespace {
   // trace_eval() prints the evaluation of the current position, consistent with
   // the UCI options set so far.
 
-  void trace_eval(Position& pos) {
+  void trace_eval(Position& pos, ThreadPool *threads) {
 
     StateListPtr states(new std::deque<StateInfo>(1));
     Position p;
-    p.set(pos.fen(), Options["UCI_Chess960"], &states->back(), Threads.main());
+    p.set(pos.fen(), Options["UCI_Chess960"], &states->back(), threads->main());
 
     Eval::NNUE::verify();
 
@@ -121,7 +121,7 @@ namespace {
   // sets the thinking time and other parameters from the input string, then starts
   // with a search.
 
-  void go(Position& pos, istringstream& is, StateListPtr& states) {
+  void go(Position& pos, istringstream& is, StateListPtr& states, ThreadPool *threads) {
 
     Search::LimitsType limits;
     string token;
@@ -147,7 +147,7 @@ namespace {
         else if (token == "infinite")  limits.infinite = 1;
         else if (token == "ponder")    ponderMode = true;
 
-    Threads.start_thinking(pos, states, limits, ponderMode);
+    threads->start_thinking(pos, states, limits, ponderMode);
   }
 
 
@@ -155,7 +155,7 @@ namespace {
   // Firstly, a list of UCI commands is set up according to the bench
   // parameters, then it is run one by one, printing a summary at the end.
 
-  void bench(Position& pos, istream& args, StateListPtr& states) {
+  void bench(Position& pos, istream& args, StateListPtr& states, ThreadPool *threads) {
 
     string token;
     uint64_t num, nodes = 0, cnt = 1;
@@ -175,16 +175,16 @@ namespace {
             cerr << "\nPosition: " << cnt++ << '/' << num << " (" << pos.fen() << ")" << endl;
             if (token == "go")
             {
-               go(pos, is, states);
-               Threads.main()->wait_for_search_finished();
-               nodes += Threads.nodes_searched();
+               go(pos, is, states, threads);
+               threads->main()->wait_for_search_finished();
+               nodes += threads->nodes_searched();
             }
             else
-               trace_eval(pos);
+               trace_eval(pos, threads);
         }
         else if (token == "setoption")  setoption(is);
-        else if (token == "position")   position(pos, is, states);
-        else if (token == "ucinewgame") { Search::clear(); elapsed = now(); } // Search::clear() may take a while
+        else if (token == "position")   position(pos, is, states, threads);
+        else if (token == "ucinewgame") { Search::clear(threads); elapsed = now(); } // Search::clear() may take a while
     }
 
     elapsed = now() - elapsed + 1; // Ensure positivity to avoid a 'divide by zero'
@@ -232,13 +232,13 @@ namespace {
 /// like running 'bench', the function returns immediately after the command is executed.
 /// In addition to the UCI ones, some additional debug commands are also supported.
 
-void UCI::loop(int argc, char* argv[]) {
+void UCI::loop(int argc, char* argv[], ThreadPool *threads) {
 
   Position pos;
   string token, cmd;
   StateListPtr states(new std::deque<StateInfo>(1));
 
-  pos.set(StartFEN, false, &states->back(), Threads.main());
+  pos.set(StartFEN, false, &states->back(), threads->main());
 
   for (int i = 1; i < argc; ++i)
       cmd += std::string(argv[i]) + " ";
@@ -254,14 +254,14 @@ void UCI::loop(int argc, char* argv[]) {
 
       if (    token == "quit"
           ||  token == "stop")
-          Threads.stop = true;
+          threads->stop = true;
 
       // The GUI sends 'ponderhit' to tell that the user has played the expected move.
       // So, 'ponderhit' is sent if pondering was done on the same move that the user
       // has played. The search should continue, but should also switch from pondering
       // to the normal search.
       else if (token == "ponderhit")
-          Threads.main()->ponder = false; // Switch to the normal search
+          threads->main()->ponder = false; // Switch to the normal search
 
       else if (token == "uci")
           sync_cout << "id name " << engine_info(true)
@@ -269,17 +269,17 @@ void UCI::loop(int argc, char* argv[]) {
                     << "\nuciok"  << sync_endl;
 
       else if (token == "setoption")  setoption(is);
-      else if (token == "go")         go(pos, is, states);
-      else if (token == "position")   position(pos, is, states);
-      else if (token == "ucinewgame") Search::clear();
+      else if (token == "go")         go(pos, is, states, threads);
+      else if (token == "position")   position(pos, is, states, threads);
+      else if (token == "ucinewgame") Search::clear(threads);
       else if (token == "isready")    sync_cout << "readyok" << sync_endl;
 
       // Add custom non-UCI commands, mainly for debugging purposes.
       // These commands must not be used during a search!
       else if (token == "flip")     pos.flip();
-      else if (token == "bench")    bench(pos, is, states);
+      else if (token == "bench")    bench(pos, is, states, threads);
       else if (token == "d")        sync_cout << pos << sync_endl;
-      else if (token == "eval")     trace_eval(pos);
+      else if (token == "eval")     trace_eval(pos, threads);
       else if (token == "compiler") sync_cout << compiler_info() << sync_endl;
       else if (token == "export_net")
       {

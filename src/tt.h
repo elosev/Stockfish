@@ -23,6 +23,7 @@
 #include "types.h"
 
 namespace Stockfish {
+  struct ThreadPool;
 
 /// TTEntry struct is the 10 bytes transposition table entry, defined as below:
 ///
@@ -85,7 +86,7 @@ public:
   void new_search() { generation8 += GENERATION_DELTA; } // Lower bits are used for other things
   TTEntry* probe(const Key key, bool& found) const;
   int hashfull() const;
-  void resize(size_t mbSize);
+  void resize(size_t mbSize, ThreadPool *threads);
   void clear();
 
   TTEntry* first_entry(const Key key) const {

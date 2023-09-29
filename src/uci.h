@@ -27,7 +27,7 @@
 namespace Stockfish {
 
 class Position;
-
+struct ThreadPool;
 namespace UCI {
 
 // Normalizes the internal value as reported by evaluate or search
@@ -53,17 +53,23 @@ class Option {
   using OnChange = void (*)(const Option&);
 
 public:
-  Option(OnChange = nullptr);
-  Option(bool v, OnChange = nullptr);
-  Option(const char* v, OnChange = nullptr);
-  Option(double v, int minv, int maxv, OnChange = nullptr);
-  Option(const char* v, const char* cur, OnChange = nullptr);
+  Option();
+  Option(ThreadPool*, OnChange = nullptr);
+  Option(ThreadPool*, bool v, OnChange = nullptr);
+  Option(ThreadPool*, const char* v, OnChange = nullptr);
+  Option(ThreadPool*, double v, int minv, int maxv, OnChange = nullptr);
+  Option(ThreadPool*, Tune*, double v, int minv, int maxv, OnChange = nullptr);
+  Option(ThreadPool*, const char* v, const char* cur, OnChange = nullptr);
 
   Option& operator=(const std::string&);
   void operator<<(const Option&);
   operator int() const;
   operator std::string() const;
   bool operator==(const char*) const;
+
+  ThreadPool* threads() const { return _threads; }
+  //set from tune.cpp only, null otherwise
+  Tune* tune() const { return _tune; }
 
 private:
   friend std::ostream& operator<<(std::ostream&, const OptionsMap&);
@@ -72,15 +78,17 @@ private:
   int min, max;
   size_t idx;
   OnChange on_change;
+  ThreadPool *_threads;
+  Tune *_tune;
 };
 
-void init(OptionsMap&);
-void loop(int argc, char* argv[]);
+void init(OptionsMap&, ThreadPool*);
+void loop(int argc, char* argv[], ThreadPool *threads);
 int to_cp(Value v);
 std::string value(Value v);
 std::string square(Square s);
 std::string move(Move m, bool chess960);
-std::string pv(const Position& pos, Depth depth);
+std::string pv(const Position& pos, Depth depth, ThreadPool *threads);
 std::string wdl(Value v, int ply);
 Move to_move(const Position& pos, std::string& str);
 

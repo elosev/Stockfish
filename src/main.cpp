@@ -17,6 +17,12 @@
 */
 
 #include <iostream>
+#include <string>
+#include "fstream2"
+#include <unistd.h>
+#include <pthread.h>
+#include <stdio.h>
+#include <fcntl.h>
 
 #include "bitboard.h"
 #include "position.h"
@@ -26,24 +32,198 @@
 #include "thread.h"
 #include "tt.h"
 #include "uci.h"
+#include <mutex>
+
+//new includes
+#include "timeman.h"
+#include "thread.h"
+#include "search.h"
 
 using namespace Stockfish;
+typedef std::basicofstream2<char, std::char_traits<char>> ofstream2;
+typedef std::basic_ifstream2<char, std::char_traits<char>> ifstream2;
+typedef std::basic_filebuf2<char, std::char_traits<char>> filebuf2;
 
-int main(int argc, char* argv[]) {
+extern "C" int stockfish_thread_wrapper(int pipe_in, int pipe_out, int argc, char* argv[]) {
+  //new variables
+  TimeManagement Time;// Our global time management object
+  ThreadPool Threads(&Time); // Global object
+  Tune tune(&Threads);
+
+  //end
+  static std::mutex mtx;
+  static bool options_initialized = false;
+
+  const std::lock_guard<std::mutex> lock(mtx);
+
+  //NOTE: this can be local or global, cin and cout will be broken upon returning from this function
+  //fixing in requires major refactoring, replacing cin/cout with local streams and passing cin/cout to all functions using them.
+  //This approach works as far as there is only one instance of stockfish in the application at time
+  filebuf2 fin_rdbuf;
+  filebuf2 fout_rdbuf;
+
+  fin_rdbuf.__open(pipe_in, std::ios::in);
+  fout_rdbuf.__open(pipe_out, std::ios::out);
+
+  std::streambuf *cin_old = std::cin.rdbuf();
+  std::streambuf *cout_old = std::cout.rdbuf();
+
+
+  std::cin.rdbuf(&fin_rdbuf);
+  std::cout.rdbuf(&fout_rdbuf);
+
+  printf("##0\n");
 
   std::cout << engine_info() << std::endl;
 
+  printf("##1\n");
+
   CommandLine::init(argc, argv);
-  UCI::init(Options);
-  Tune::init();
+  if (!options_initialized) {
+    UCI::init(Options, &Threads);
+    options_initialized = true;
+  }
+
+  //elosev: calling this after options are initialized (see tune.h)
+  tune.init();
   PSQT::init();
   Bitboards::init();
   Position::init();
   Threads.set(size_t(Options["Threads"]));
-  Search::clear(); // After threads are up
+  Search::clear(&Threads); // After threads are up
   Eval::NNUE::init();
 
-  UCI::loop(argc, argv);
+  printf("##4\n");
+  UCI::loop(argc, argv, &Threads);
+  printf("##5\n");
+
+  Threads.set(0);
+  printf("##6\n");
+
+
+  std::cin.rdbuf(cin_old);
+  std::cout.rdbuf(cout_old);
+  std::cout << "##7" << std::endl;
+
+  fin_rdbuf.close();
+  fout_rdbuf.close();
+
+  return 0;
+}
+
+struct ThreadParams {
+  int pipe_in;
+  int pipe_out;
+  int argc;
+  char **argv;
+};
+
+extern "C" void *thread_main(void *p) {
+  ThreadParams *params = (ThreadParams *)p; 
+  printf("Hello from thread! p_in:%d p_out:%d\n", params->pipe_in, params->pipe_out);
+
+  stockfish_thread_wrapper(params->pipe_in, params->pipe_out, params->argc, params->argv);
+
+  printf("Goodbye from thread!\n");
+
+  return 0;
+}
+
+int pipe_wrapper(int argc, char* argv[]) {
+  int fd_in[2] = {0, 0}; 
+  int fd_out[2] = {0, 0}; 
+
+  if (pipe(fd_in)) {
+    printf("Cannot create fd_in\n");
+    return 1;
+  }
+  if (pipe(fd_out)) {
+    printf("Cannot create fd_in\n");
+    return 1;
+  }
+
+  printf("fd_in: %d,%d; fd_out:%d,%d\n",
+      fd_in[0], fd_in[1],
+      fd_out[0], fd_out[1]);
+
+  ThreadParams params = {
+    .pipe_in = fd_in[0],
+    .pipe_out = fd_out[1],
+    .argc = argc,
+    .argv = argv
+  };
+
+  ofstream2 file_in;
+  ifstream2 file_out;
+
+  file_in.__open(fd_in[1], std::ios::out | std::ios::binary);
+  file_out.__open(fd_out[0], std::ios::in | std::ios::binary);
+
+
+  if (!file_in.is_open())  {
+    printf("file_in is closed\n");
+    return 1;
+  }
+  if (!file_out.is_open())  {
+    printf("file_out is closed\n");
+    return 1;
+  }
+
+  pthread_t thread_id = 0;
+  if (pthread_create(&thread_id, NULL, thread_main, &params)) {
+    printf("Cannot create thread\n");
+    return 1;
+  }
+
+  printf("Thread id=0x%x is ready. Reading...\n", thread_id);
+
+
+  file_in << "uci" << std::endl;
+  file_in << "quit" << std::endl;
+
+
+  std::string temp;
+  while (std::getline(file_out, temp)) {
+    printf(">>> %s\n", temp.c_str());
+  }
+ 
+  if (pthread_join(thread_id, NULL)) {
+    printf("Cannot join thread!\n");
+  }
+
+  file_out.close();
+  file_in.close();
+
+  return 0;
+}
+
+/*int main(int argc, char* argv[]) {
+  printf(">>>>>>1\n");
+  pipe_wrapper(argc, argv);
+  printf(">>>>>>2\n");
+  return pipe_wrapper(argc, argv);
+}*/
+
+int main(int argc, char* argv[]) {
+  TimeManagement Time;// Our global time management object
+  ThreadPool Threads(&Time); // Global object
+  Tune tune(&Threads);
+
+
+  std::cout << engine_info() << std::endl;
+
+  CommandLine::init(argc, argv);
+  UCI::init(Options, &Threads);
+  //elosev: calling this after options are initialized (see tune.h)
+  tune.init();
+  PSQT::init();
+  Bitboards::init();
+  Position::init();
+  Threads.set(size_t(Options["Threads"]));
+  Search::clear(&Threads); // After threads are up
+  Eval::NNUE::init();
+
+  UCI::loop(argc, argv, &Threads);
 
   Threads.set(0);
   return 0;
