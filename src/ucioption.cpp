@@ -33,7 +33,6 @@ using std::string;
 
 namespace Stockfish {
 
-UCI::OptionsMap Options; // Global object
 
 namespace UCI {
 
@@ -43,7 +42,7 @@ static void on_hash_size(const Option& o) { TT.resize(size_t(o), o.threads()); }
 static void on_logger(const Option& o) { start_logger(o); }
 static void on_threads(const Option& o) { o.threads()->set(size_t(o)); }
 static void on_tb_path(const Option& o) { Tablebases::init(o); }
-static void on_eval_file(const Option&) { Eval::NNUE::init(); }
+static void on_eval_file(const Option& o) { Eval::NNUE::init(*o.threads()->options()); }
 
 /// Our case insensitive less() function as required by UCI protocol
 bool CaseInsensitiveLess::operator() (const string& s1, const string& s2) const {

@@ -25,6 +25,10 @@
 namespace Stockfish {
   struct ThreadPool;
 
+  namespace UCI {
+    class OptionsMap;
+  }
+
 /// TTEntry struct is the 10 bytes transposition table entry, defined as below:
 ///
 /// key        16 bit
@@ -87,7 +91,7 @@ public:
   TTEntry* probe(const Key key, bool& found) const;
   int hashfull() const;
   void resize(size_t mbSize, ThreadPool *threads);
-  void clear();
+  void clear(UCI::OptionsMap *options);
 
   TTEntry* first_entry(const Key key) const {
     return &table[mul_hi64(key, clusterCount)].entry[0];

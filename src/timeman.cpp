@@ -33,7 +33,7 @@ namespace Stockfish {
 //      1) x basetime (+ z increment)
 //      2) x moves in y seconds (+ z increment)
 
-void TimeManagement::init(Search::LimitsType& limits, Color us, int ply) {
+void TimeManagement::init(UCI::OptionsMap *options, Search::LimitsType& limits, Color us, int ply) {
 
   // if we have no time, no need to initialize TM, except for the start time,
   // which is used by movetime.
@@ -41,9 +41,9 @@ void TimeManagement::init(Search::LimitsType& limits, Color us, int ply) {
   if (limits.time[us] == 0)
       return;
 
-  TimePoint moveOverhead    = TimePoint(Options["Move Overhead"]);
-  TimePoint slowMover       = TimePoint(Options["Slow Mover"]);
-  TimePoint npmsec          = TimePoint(Options["nodestime"]);
+  TimePoint moveOverhead    = TimePoint((*options)["Move Overhead"]);
+  TimePoint slowMover       = TimePoint((*options)["Slow Mover"]);
+  TimePoint npmsec          = TimePoint((*options)["nodestime"]);
 
   // optScale is a percentage of available time to use for the current move.
   // maxScale is a multiplier applied to optimumTime.
@@ -101,7 +101,7 @@ void TimeManagement::init(Search::LimitsType& limits, Color us, int ply) {
   optimumTime = TimePoint(optScale * timeLeft);
   maximumTime = TimePoint(std::min(0.8 * limits.time[us] - moveOverhead, maxScale * optimumTime)) - 10;
 
-  if (Options["Ponder"])
+  if ((*options)["Ponder"])
       optimumTime += optimumTime / 4;
 }
 

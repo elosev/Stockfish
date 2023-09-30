@@ -32,6 +32,10 @@
 
 namespace Stockfish {
 
+  namespace UCI {
+    class OptionsMap;
+  }
+
 /// Thread class keeps together all the thread-related stuff. We use
 /// per-thread pawn and material hash tables so that once we get a
 /// pointer to an entry its life time is unlimited and we don't have
@@ -46,9 +50,10 @@ class Thread {
   size_t idx;
   bool exit = false, searching = true; // Set before starting std::thread
   NativeThread stdThread;
-  ThreadPool *threads;
+  ThreadPool *_threads;
+  UCI::OptionsMap *_options;
 public:
-  explicit Thread(ThreadPool*, size_t);
+  explicit Thread(ThreadPool*, UCI::OptionsMap*, size_t);
   virtual ~Thread();
   virtual void search();
   void clear();
@@ -56,7 +61,8 @@ public:
   void start_searching();
   void wait_for_search_finished();
   size_t id() const { return idx; }
-  ThreadPool* get_threads() { return this->threads; }
+  ThreadPool* threads() { return this->_threads; }
+  UCI::OptionsMap* options() { return this->_options; }
 
   size_t pvIdx, pvLast;
   std::atomic<uint64_t> nodes, tbHits, bestMoveChanges;
@@ -100,7 +106,7 @@ struct MainThread : public Thread {
 
 struct ThreadPool {
 
-  ThreadPool(TimeManagement *_time) : time(_time) {}
+  ThreadPool(TimeManagement *time, UCI::OptionsMap *options) : _time(time), _options(options) {}
   void start_thinking(Position&, StateListPtr&, const Search::LimitsType&, bool = false);
   void clear();
   void set(size_t);
@@ -121,12 +127,14 @@ struct ThreadPool {
   auto size() const noexcept { return threads.size(); }
   auto empty() const noexcept { return threads.empty(); }
 
-  TimeManagement* get_time() { return this->time; }
+  TimeManagement* time() { return _time; }
+  UCI::OptionsMap* options() { return _options; }
 
 private:
   StateListPtr setupStates;
   std::vector<Thread*> threads;
-  TimeManagement *time;
+  TimeManagement *_time;
+  UCI::OptionsMap *_options;
 
   uint64_t accumulate(std::atomic<uint64_t> Thread::* member) const {
 

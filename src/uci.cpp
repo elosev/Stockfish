@@ -68,7 +68,7 @@ namespace {
         return;
 
     states = StateListPtr(new std::deque<StateInfo>(1)); // Drop the old state and create a new one
-    pos.set(fen, Options["UCI_Chess960"], &states->back(), threads->main());
+    pos.set(fen, (*threads->options())["UCI_Chess960"], &states->back(), threads->main());
 
     // Parse the move list, if any
     while (is >> token && (m = UCI::to_move(pos, token)) != MOVE_NONE)
@@ -85,9 +85,9 @@ namespace {
 
     StateListPtr states(new std::deque<StateInfo>(1));
     Position p;
-    p.set(pos.fen(), Options["UCI_Chess960"], &states->back(), threads->main());
+    p.set(pos.fen(), (*threads->options())["UCI_Chess960"], &states->back(), threads->main());
 
-    Eval::NNUE::verify();
+    Eval::NNUE::verify(*threads->options());
 
     sync_cout << "\n" << Eval::trace(p) << sync_endl;
   }
@@ -96,7 +96,7 @@ namespace {
   // setoption() is called when the engine receives the "setoption" UCI command.
   // The function updates the UCI option ("name") to the given value ("value").
 
-  void setoption(istringstream& is) {
+  void setoption(istringstream& is, ThreadPool *threads) {
 
     string token, name, value;
 
@@ -110,8 +110,8 @@ namespace {
     while (is >> token)
         value += (value.empty() ? "" : " ") + token;
 
-    if (Options.count(name))
-        Options[name] = value;
+    if (threads->options()->count(name))
+        (*threads->options())[name] = value;
     else
         sync_cout << "No such option: " << name << sync_endl;
   }
@@ -182,7 +182,7 @@ namespace {
             else
                trace_eval(pos, threads);
         }
-        else if (token == "setoption")  setoption(is);
+        else if (token == "setoption")  setoption(is, threads);
         else if (token == "position")   position(pos, is, states, threads);
         else if (token == "ucinewgame") { Search::clear(threads); elapsed = now(); } // Search::clear() may take a while
     }
@@ -225,6 +225,9 @@ namespace {
 
 } // namespace
 
+namespace UCI {
+  std::ostream& operator<<(std::ostream&, const UCI::OptionsMap&);
+}
 
 /// UCI::loop() waits for a command from the stdin, parses it and then calls the appropriate
 /// function. It also intercepts an end-of-file (EOF) indication from the stdin to ensure a
@@ -263,12 +266,14 @@ void UCI::loop(int argc, char* argv[], ThreadPool *threads) {
       else if (token == "ponderhit")
           threads->main()->ponder = false; // Switch to the normal search
 
-      else if (token == "uci")
+      else if (token == "uci") {
+        const OptionsMap& options = *threads->options();
           sync_cout << "id name " << engine_info(true)
-                    << "\n"       << Options
+                    << "\n"       << options
                     << "\nuciok"  << sync_endl;
+      }
 
-      else if (token == "setoption")  setoption(is);
+      else if (token == "setoption")  setoption(is, threads);
       else if (token == "go")         go(pos, is, states, threads);
       else if (token == "position")   position(pos, is, states, threads);
       else if (token == "ucinewgame") Search::clear(threads);

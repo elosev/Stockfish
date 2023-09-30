@@ -20,6 +20,7 @@
 #define EVALUATE_H_INCLUDED
 
 #include <string>
+#include <map>
 #include <optional>
 
 #include "types.h"
@@ -27,6 +28,9 @@
 namespace Stockfish {
 
 class Position;
+namespace UCI {
+  class OptionsMap;
+}
 
 namespace Eval {
 
@@ -42,8 +46,8 @@ namespace Eval {
 
   namespace NNUE {
 
-    void init();
-    void verify();
+    void init(UCI::OptionsMap& options);
+    void verify(UCI::OptionsMap& options);
 
   } // namespace NNUE
 

@@ -25,12 +25,16 @@
 
 namespace Stockfish {
 
+  namespace UCI {
+    class OptionsMap;
+  }
+
 /// The TimeManagement class computes the optimal time to think depending on
 /// the maximum available time, the game move number and other parameters.
 
 class TimeManagement {
 public:
-  void init(Search::LimitsType& limits, Color us, int ply);
+  void init(UCI::OptionsMap *options, Search::LimitsType& limits, Color us, int ply);
   TimePoint optimum() const { return optimumTime; }
   TimePoint maximum() const { return maximumTime; }
   TimePoint elapsed(ThreadPool *threads) const { return Search::Limits.npmsec ?

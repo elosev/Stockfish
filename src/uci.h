@@ -45,7 +45,7 @@ struct CaseInsensitiveLess {
 };
 
 /// The options container is defined as a std::map
-using OptionsMap = std::map<std::string, Option, CaseInsensitiveLess>;
+class OptionsMap: public std::map<std::string, Option, CaseInsensitiveLess> {};
 
 /// The Option class implements each option as specified by the UCI protocol
 class Option {
@@ -93,8 +93,6 @@ std::string wdl(Value v, int ply);
 Move to_move(const Position& pos, std::string& str);
 
 } // namespace UCI
-
-extern UCI::OptionsMap Options;
 
 } // namespace Stockfish
 

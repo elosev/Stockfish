@@ -76,29 +76,29 @@ void TranspositionTable::resize(size_t mbSize, ThreadPool *threads) {
       exit(EXIT_FAILURE);
   }
 
-  clear();
+  clear(threads->options());
 }
 
 
 /// TranspositionTable::clear() initializes the entire transposition table to zero,
 //  in a multi-threaded way.
 
-void TranspositionTable::clear() {
+void TranspositionTable::clear(UCI::OptionsMap *options) {
 
   std::vector<std::thread> threads;
 
-  for (size_t idx = 0; idx < size_t(Options["Threads"]); ++idx)
+  for (size_t idx = 0; idx < size_t((*options)["Threads"]); ++idx)
   {
-      threads.emplace_back([this, idx]() {
+      threads.emplace_back([this, idx, options]() {
 
           // Thread binding gives faster search on systems with a first-touch policy
-          if (Options["Threads"] > 8)
+          if ((*options)["Threads"] > 8)
               WinProcGroup::bindThisThread(idx);
 
           // Each thread will zero its part of the hash table
-          const size_t stride = size_t(clusterCount / Options["Threads"]),
+          const size_t stride = size_t(clusterCount / (*options)["Threads"]),
                        start  = size_t(stride * idx),
-                       len    = idx != size_t(Options["Threads"]) - 1 ?
+                       len    = idx != size_t((*options)["Threads"]) - 1 ?
                                 stride : clusterCount - start;
 
           std::memset(&table[start], 0, len * sizeof(Cluster));

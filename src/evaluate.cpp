@@ -66,9 +66,9 @@ namespace Eval {
   /// in the engine directory. Distro packagers may define the DEFAULT_NNUE_DIRECTORY
   /// variable to have the engine search in a special directory in their distro.
 
-  void NNUE::init() {
+  void NNUE::init(UCI::OptionsMap &options) {
 
-    string eval_file = string(Options["EvalFile"]);
+    string eval_file = string(options["EvalFile"]);
     if (eval_file.empty())
         eval_file = EvalFileDefaultName;
 
@@ -107,9 +107,9 @@ namespace Eval {
   }
 
   /// NNUE::verify() verifies that the last net used was loaded successfully
-  void NNUE::verify() {
+  void NNUE::verify(UCI::OptionsMap& options) {
 
-    string eval_file = string(Options["EvalFile"]);
+    string eval_file = string(options["EvalFile"]);
     if (eval_file.empty())
         eval_file = EvalFileDefaultName;
 

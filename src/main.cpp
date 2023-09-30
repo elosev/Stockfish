@@ -46,8 +46,9 @@ typedef std::basic_filebuf2<char, std::char_traits<char>> filebuf2;
 
 extern "C" int stockfish_thread_wrapper(int pipe_in, int pipe_out, int argc, char* argv[]) {
   //new variables
+  UCI::OptionsMap Options; // Global object
   TimeManagement Time;// Our global time management object
-  ThreadPool Threads(&Time); // Global object
+  ThreadPool Threads(&Time, &Options); // Global object
   Tune tune(&Threads);
 
   //end
@@ -91,7 +92,7 @@ extern "C" int stockfish_thread_wrapper(int pipe_in, int pipe_out, int argc, cha
   Position::init();
   Threads.set(size_t(Options["Threads"]));
   Search::clear(&Threads); // After threads are up
-  Eval::NNUE::init();
+  Eval::NNUE::init(Options);
 
   printf("##4\n");
   UCI::loop(argc, argv, &Threads);
@@ -205,8 +206,13 @@ int pipe_wrapper(int argc, char* argv[]) {
 }*/
 
 int main(int argc, char* argv[]) {
+  //elosev: options is created before ThreadPool, but take a reference to i later in initialization.
+  //It introduces circular reference, and potentially creates risks during destruction where options
+  //may have reference to already deleted ThreadPool. It seems to be ok, as Options are not used
+  //after we exit from UCI::loop
+  UCI::OptionsMap Options; // Global object
   TimeManagement Time;// Our global time management object
-  ThreadPool Threads(&Time); // Global object
+  ThreadPool Threads(&Time, &Options); // Global object
   Tune tune(&Threads);
 
 
@@ -221,7 +227,7 @@ int main(int argc, char* argv[]) {
   Position::init();
   Threads.set(size_t(Options["Threads"]));
   Search::clear(&Threads); // After threads are up
-  Eval::NNUE::init();
+  Eval::NNUE::init(Options);
 
   UCI::loop(argc, argv, &Threads);
 

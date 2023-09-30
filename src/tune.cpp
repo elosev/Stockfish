@@ -23,6 +23,7 @@
 #include "types.h"
 #include "misc.h"
 #include "uci.h"
+#include "thread.h"
 
 using std::string;
 
@@ -65,8 +66,9 @@ static void make_option(Tune *tune, const string& n, int v, const SetRange& r) {
   if (TuneResults.count(n))
       v = TuneResults[n];
 
-  Options[n] << UCI::Option(tune->threads(), tune, v, r(v).first, r(v).second, on_tune);
-  LastOption = &Options[n];
+  UCI::OptionsMap *options = tune->threads()->options();
+  (*options)[n] << UCI::Option(tune->threads(), tune, v, r(v).first, r(v).second, on_tune);
+  LastOption = &(*options)[n];
 
   // Print formatted parameters, ready to be copy-pasted in Fishtest
   std::cout << n << ","
@@ -80,15 +82,15 @@ static void make_option(Tune *tune, const string& n, int v, const SetRange& r) {
 template<> void Tune::Entry<int>::init_option() { make_option(tune, name, value, range); }
 
 template<> void Tune::Entry<int>::read_option() {
-  if (Options.count(name))
-      value = int(Options[name]);
+  if (tune->threads()->options()->count(name))
+      value = int((*tune->threads()->options())[name]);
 }
 
 template<> void Tune::Entry<Value>::init_option() { make_option(tune, name, value, range); }
 
 template<> void Tune::Entry<Value>::read_option() {
-  if (Options.count(name))
-      value = Value(int(Options[name]));
+  if (tune->threads()->options()->count(name))
+      value = Value(int((*tune->threads()->options())[name]));
 }
 
 template<> void Tune::Entry<Score>::init_option() {
@@ -97,11 +99,11 @@ template<> void Tune::Entry<Score>::init_option() {
 }
 
 template<> void Tune::Entry<Score>::read_option() {
-  if (Options.count("m" + name))
-      value = make_score(int(Options["m" + name]), eg_value(value));
+  if (tune->threads()->options()->count("m" + name))
+      value = make_score(int((*tune->threads()->options())["m" + name]), eg_value(value));
 
-  if (Options.count("e" + name))
-      value = make_score(mg_value(value), int(Options["e" + name]));
+  if (tune->threads()->options()->count("e" + name))
+      value = make_score(mg_value(value), int((*tune->threads()->options())["e" + name]));
 }
 
 // Instead of a variable here we have a PostUpdate function: just call it
