@@ -38,10 +38,6 @@
 
 namespace Stockfish {
 
-namespace Search {
-
-  LimitsType Limits;
-}
 
 namespace Tablebases {
 
@@ -184,9 +180,10 @@ void Search::clear(ThreadPool* threads) {
 
 void MainThread::search() {
 
-  if (Limits.perft)
+
+  if (threads()->limits()->perft)
   {
-      nodes = perft<true>(rootPos, Limits.perft);
+      nodes = perft<true>(rootPos, threads()->limits()->perft);
       sync_cout << "\nNodes searched: " << nodes << "\n" << sync_endl;
       return;
   }
@@ -196,7 +193,7 @@ void MainThread::search() {
   UCI::OptionsMap *options = threads->options();
 
   Color us = rootPos.side_to_move();
-  time->init(options, Limits, us, rootPos.game_ply());
+  time->init(options, *threads->limits(), us, rootPos.game_ply());
   threads->tt()->new_search();
 
   Eval::NNUE::verify(*options);
@@ -220,7 +217,7 @@ void MainThread::search() {
   // GUI sends a "stop" or "ponderhit" command. We therefore simply wait here
   // until the GUI sends one of those commands.
 
-  while (!threads->stop && (ponder || Limits.infinite))
+  while (!threads->stop && (ponder || threads->limits()->infinite))
   {} // Busy wait for a stop or a ponder reset
 
   // Stop the threads if not already stopped (also raise the stop if
@@ -232,14 +229,14 @@ void MainThread::search() {
 
   // When playing in 'nodes as time' mode, subtract the searched nodes from
   // the available ones before exiting.
-  if (Limits.npmsec)
-      time->availableNodes += Limits.inc[us] - threads->nodes_searched();
+  if (threads->limits()->npmsec)
+      time->availableNodes += threads->limits()->inc[us] - threads->nodes_searched();
 
   Thread* bestThread = this;
   Skill skill = Skill((*options)["Skill Level"], (*options)["UCI_LimitStrength"] ? int((*options)["UCI_Elo"]) : 0);
 
   if (   int((*options)["MultiPV"]) == 1
-      && !Limits.depth
+      && !threads->limits()->depth
       && !skill.enabled()
       && rootMoves[0].pv[0] != MOVE_NONE)
       bestThread = threads->get_best_thread();
@@ -321,7 +318,7 @@ void Thread::search() {
   // Iterative deepening loop until requested to stop or the target depth is reached
   while (   ++rootDepth < MAX_PLY
          && !threads()->stop
-         && !(Limits.depth && mainThread && rootDepth > Limits.depth))
+         && !(threads()->limits()->depth && mainThread && rootDepth > threads()->limits()->depth))
   {
       // Age out PV variability metric
       if (mainThread)
@@ -438,9 +435,9 @@ void Thread::search() {
       }
 
       // Have we found a "mate in x"?
-      if (   Limits.mate
+      if (   threads()->limits()->mate
           && bestValue >= VALUE_MATE_IN_MAX_PLY
-          && VALUE_MATE - bestValue <= 2 * Limits.mate)
+          && VALUE_MATE - bestValue <= 2 * threads()->limits()->mate)
           threads()->stop = true;
 
       if (!mainThread)
@@ -458,7 +455,7 @@ void Thread::search() {
       }
 
       // Do we have time for the next iteration? Can we stop searching now?
-      if (    Limits.use_time_management()
+      if (    threads()->limits()->use_time_management()
           && !threads()->stop
           && !mainThread->stopOnPonderhit)
       {
@@ -1834,12 +1831,12 @@ void MainThread::check_time() {
   TimeManagement *time = threads()->time();
 
   // When using nodes, ensure checking rate is not lower than 0.1% of nodes
-  callsCnt = Limits.nodes ? std::min(512, int(Limits.nodes / 1024)) : 512;
+  callsCnt = threads()->limits()->nodes ? std::min(512, int(threads()->limits()->nodes / 1024)) : 512;
 
   static TimePoint lastInfoTime = now();
 
   TimePoint elapsed = time->elapsed(threads());
-  TimePoint tick = Limits.startTime + elapsed;
+  TimePoint tick = threads()->limits()->startTime + elapsed;
 
   if (tick - lastInfoTime >= 1000)
   {
@@ -1851,9 +1848,9 @@ void MainThread::check_time() {
   if (ponder)
       return;
 
-  if (   (Limits.use_time_management() && (elapsed > time->maximum() || stopOnPonderhit))
-      || (Limits.movetime && elapsed >= Limits.movetime)
-      || (Limits.nodes && threads()->nodes_searched() >= (uint64_t)Limits.nodes))
+  if (   (threads()->limits()->use_time_management() && (elapsed > time->maximum() || stopOnPonderhit))
+      || (threads()->limits()->movetime && elapsed >= threads()->limits()->movetime)
+      || (threads()->limits()->nodes && threads()->nodes_searched() >= (uint64_t)threads()->limits()->nodes))
       threads()->stop = true;
 }
 

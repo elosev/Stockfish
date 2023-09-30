@@ -37,7 +37,7 @@ public:
   void init(UCI::OptionsMap *options, Search::LimitsType& limits, Color us, int ply);
   TimePoint optimum() const { return optimumTime; }
   TimePoint maximum() const { return maximumTime; }
-  TimePoint elapsed(ThreadPool *threads) const { return Search::Limits.npmsec ?
+  TimePoint elapsed(ThreadPool *threads) const { return threads->limits()->npmsec ?
                                      TimePoint(threads->nodes_searched()) : now() - startTime; }
 
   int64_t availableNodes; // When in 'nodes as time' mode

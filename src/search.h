@@ -105,7 +105,6 @@ struct LimitsType {
   int64_t nodes;
 };
 
-extern LimitsType Limits;
 
 void init(ThreadPool *threads);
 void clear(ThreadPool *threads);
