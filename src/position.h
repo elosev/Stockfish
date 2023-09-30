@@ -80,7 +80,6 @@ class Thread;
 
 class Position {
 public:
-  static void init();
   Position() = delete;
   explicit Position(ThreadPool *threads): _threads(threads) {
     assert(_threads);
@@ -416,6 +415,23 @@ inline StateInfo* Position::state() const {
 
   return st;
 }
+
+struct Zobrist {
+  Key psq[PIECE_NB][SQUARE_NB];
+  Key enpassant[FILE_NB];
+  Key castling[CASTLING_RIGHT_NB];
+  Key side;
+};
+
+struct PositionTables {
+  void init();
+
+  Zobrist zobrist;
+  // Cuckoo tables with Zobrist hashes of valid reversible moves, and the moves themselves
+  Key cuckoo[8192];
+  Move cuckooMove[8192];
+
+};
 
 } // namespace Stockfish
 

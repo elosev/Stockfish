@@ -37,14 +37,6 @@ using std::string;
 
 namespace Stockfish {
 
-namespace Zobrist {
-
-  Key psq[PIECE_NB][SQUARE_NB];
-  Key enpassant[FILE_NB];
-  Key castling[CASTLING_RIGHT_NB];
-  Key side;
-}
-
 namespace {
 
 constexpr std::string_view PieceToChar(" PNBRQK  pnbrqk");
@@ -103,28 +95,24 @@ std::ostream& operator<<(std::ostream& os, const Position& pos) {
 inline int H1(Key h) { return h & 0x1fff; }
 inline int H2(Key h) { return (h >> 16) & 0x1fff; }
 
-// Cuckoo tables with Zobrist hashes of valid reversible moves, and the moves themselves
-Key cuckoo[8192];
-Move cuckooMove[8192];
 
+/// PositionTables::init() initializes at startup the various arrays used to compute hash keys
 
-/// Position::init() initializes at startup the various arrays used to compute hash keys
-
-void Position::init() {
+void PositionTables::init() {
 
   PRNG rng(1070372);
 
   for (Piece pc : Pieces)
       for (Square s = SQ_A1; s <= SQ_H8; ++s)
-          Zobrist::psq[pc][s] = rng.rand<Key>();
+          zobrist.psq[pc][s] = rng.rand<Key>();
 
   for (File f = FILE_A; f <= FILE_H; ++f)
-      Zobrist::enpassant[f] = rng.rand<Key>();
+      zobrist.enpassant[f] = rng.rand<Key>();
 
   for (int cr = NO_CASTLING; cr <= ANY_CASTLING; ++cr)
-      Zobrist::castling[cr] = rng.rand<Key>();
+      zobrist.castling[cr] = rng.rand<Key>();
 
-  Zobrist::side = rng.rand<Key>();
+  zobrist.side = rng.rand<Key>();
 
   // Prepare the cuckoo tables
   std::memset(cuckoo, 0, sizeof(cuckoo));
@@ -136,7 +124,7 @@ void Position::init() {
               if ((type_of(pc) != PAWN) && (attacks_bb(type_of(pc), s1, 0) & s2))
               {
                   Move move = make_move(s1, s2);
-                  Key key = Zobrist::psq[pc][s1] ^ Zobrist::psq[pc][s2] ^ Zobrist::side;
+                  Key key = zobrist.psq[pc][s1] ^ zobrist.psq[pc][s2] ^ zobrist.side;
                   int i = H1(key);
                   while (true)
                   {
@@ -346,23 +334,23 @@ void Position::set_state() const {
   {
       Square s = pop_lsb(b);
       Piece pc = piece_on(s);
-      st->key ^= Zobrist::psq[pc][s];
+      st->key ^= _threads->ptb()->zobrist.psq[pc][s];
 
       if (type_of(pc) != KING && type_of(pc) != PAWN)
           st->nonPawnMaterial[color_of(pc)] += PieceValue[MG][pc];
   }
 
   if (st->epSquare != SQ_NONE)
-      st->key ^= Zobrist::enpassant[file_of(st->epSquare)];
+      st->key ^= _threads->ptb()->zobrist.enpassant[file_of(st->epSquare)];
 
   if (sideToMove == BLACK)
-      st->key ^= Zobrist::side;
+      st->key ^= _threads->ptb()->zobrist.side;
 
-  st->key ^= Zobrist::castling[st->castlingRights];
+  st->key ^= _threads->ptb()->zobrist.castling[st->castlingRights];
 
   for (Piece pc : Pieces)
       for (int cnt = 0; cnt < pieceCount[pc]; ++cnt)
-          st->materialKey ^= Zobrist::psq[pc][cnt];
+          st->materialKey ^= _threads->ptb()->zobrist.psq[pc][cnt];
 }
 
 
@@ -680,7 +668,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
   assert(&newSt != st);
 
   thisThread->nodes.fetch_add(1, std::memory_order_relaxed);
-  Key k = st->key ^ Zobrist::side;
+  Key k = st->key ^ _threads->ptb()->zobrist.side;
 
   // Copy some fields of the old state to our new StateInfo object except the
   // ones which are going to be recalculated from scratch anyway and then switch
@@ -720,7 +708,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
       Square rfrom, rto;
       do_castling<true>(us, from, to, rfrom, rto);
 
-      k ^= Zobrist::psq[captured][rfrom] ^ Zobrist::psq[captured][rto];
+      k ^= _threads->ptb()->zobrist.psq[captured][rfrom] ^ _threads->ptb()->zobrist.psq[captured][rto];
       captured = NO_PIECE;
   }
 
@@ -755,29 +743,29 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
       remove_piece(capsq);
 
       // Update material hash key and prefetch access to materialTable
-      k ^= Zobrist::psq[captured][capsq];
-      st->materialKey ^= Zobrist::psq[captured][pieceCount[captured]];
+      k ^= _threads->ptb()->zobrist.psq[captured][capsq];
+      st->materialKey ^= _threads->ptb()->zobrist.psq[captured][pieceCount[captured]];
 
       // Reset rule 50 counter
       st->rule50 = 0;
   }
 
   // Update hash key
-  k ^= Zobrist::psq[pc][from] ^ Zobrist::psq[pc][to];
+  k ^= _threads->ptb()->zobrist.psq[pc][from] ^ _threads->ptb()->zobrist.psq[pc][to];
 
   // Reset en passant square
   if (st->epSquare != SQ_NONE)
   {
-      k ^= Zobrist::enpassant[file_of(st->epSquare)];
+      k ^= _threads->ptb()->zobrist.enpassant[file_of(st->epSquare)];
       st->epSquare = SQ_NONE;
   }
 
   // Update castling rights if needed
   if (st->castlingRights && (castlingRightsMask[from] | castlingRightsMask[to]))
   {
-      k ^= Zobrist::castling[st->castlingRights];
+      k ^= _threads->ptb()->zobrist.castling[st->castlingRights];
       st->castlingRights &= ~(castlingRightsMask[from] | castlingRightsMask[to]);
-      k ^= Zobrist::castling[st->castlingRights];
+      k ^= _threads->ptb()->zobrist.castling[st->castlingRights];
   }
 
   // Move the piece. The tricky Chess960 castling is handled earlier
@@ -798,7 +786,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
           && (pawn_attacks_bb(us, to - pawn_push(us)) & pieces(them, PAWN)))
       {
           st->epSquare = to - pawn_push(us);
-          k ^= Zobrist::enpassant[file_of(st->epSquare)];
+          k ^= _threads->ptb()->zobrist.enpassant[file_of(st->epSquare)];
       }
 
       else if (type_of(m) == PROMOTION)
@@ -819,9 +807,9 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
           dp.dirty_num++;
 
           // Update hash keys
-          k ^= Zobrist::psq[pc][to] ^ Zobrist::psq[promotion][to];
-          st->materialKey ^=  Zobrist::psq[promotion][pieceCount[promotion]-1]
-                            ^ Zobrist::psq[pc][pieceCount[pc]];
+          k ^= _threads->ptb()->zobrist.psq[pc][to] ^ _threads->ptb()->zobrist.psq[promotion][to];
+          st->materialKey ^=  _threads->ptb()->zobrist.psq[promotion][pieceCount[promotion]-1]
+                            ^ _threads->ptb()->zobrist.psq[pc][pieceCount[pc]];
 
           // Update material
           st->nonPawnMaterial[us] += PieceValue[MG][promotion];
@@ -983,11 +971,11 @@ void Position::do_null_move(StateInfo& newSt) {
 
   if (st->epSquare != SQ_NONE)
   {
-      st->key ^= Zobrist::enpassant[file_of(st->epSquare)];
+      st->key ^= _threads->ptb()->zobrist.enpassant[file_of(st->epSquare)];
       st->epSquare = SQ_NONE;
   }
 
-  st->key ^= Zobrist::side;
+  st->key ^= _threads->ptb()->zobrist.side;
   ++st->rule50;
   prefetch(_threads->tt()->first_entry(key()));
 
@@ -1024,12 +1012,12 @@ Key Position::key_after(Move m) const {
   Square to = to_sq(m);
   Piece pc = piece_on(from);
   Piece captured = piece_on(to);
-  Key k = st->key ^ Zobrist::side;
+  Key k = st->key ^ _threads->ptb()->zobrist.side;
 
   if (captured)
-      k ^= Zobrist::psq[captured][to];
+      k ^= _threads->ptb()->zobrist.psq[captured][to];
 
-  k ^= Zobrist::psq[pc][to] ^ Zobrist::psq[pc][from];
+  k ^= _threads->ptb()->zobrist.psq[pc][to] ^ _threads->ptb()->zobrist.psq[pc][from];
 
   return (captured || type_of(pc) == PAWN)
       ? k : adjust_key50<true>(k);
@@ -1199,10 +1187,10 @@ bool Position::has_game_cycle(int ply) const {
       stp = stp->previous->previous;
 
       Key moveKey = originalKey ^ stp->key;
-      if (   (j = H1(moveKey), cuckoo[j] == moveKey)
-          || (j = H2(moveKey), cuckoo[j] == moveKey))
+      if (   (j = H1(moveKey), _threads->ptb()->cuckoo[j] == moveKey)
+          || (j = H2(moveKey), _threads->ptb()->cuckoo[j] == moveKey))
       {
-          Move move = cuckooMove[j];
+          Move move = _threads->ptb()->cuckooMove[j];
           Square s1 = from_sq(move);
           Square s2 = to_sq(move);
 

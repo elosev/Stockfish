@@ -2,6 +2,7 @@
 **/*.o
 **/*.s
 src/.depend
+**/*.swp
 
 # Built binary
 src/stockfish*

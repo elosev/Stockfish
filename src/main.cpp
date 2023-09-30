@@ -46,12 +46,13 @@ typedef std::basic_filebuf2<char, std::char_traits<char>> filebuf2;
 
 extern "C" int stockfish_thread_wrapper(int pipe_in, int pipe_out, int argc, char* argv[]) {
   //new variables
+  PositionTables ptb;
   Search::LimitsType Limits;
   TranspositionTable TT; // Our global TranspositionTable
   UCI::OptionsMap Options; // Global object
   TimeManagement Time;// Our global time management object
   Tablebases::Tablebases tb;
-  ThreadPool Threads(&Time, &Options, &TT, &Limits, &tb); // Global object
+  ThreadPool Threads(&Time, &Options, &TT, &Limits, &tb, &ptb); // Global object
   Tune tune(&Threads);
 
   //end
@@ -92,7 +93,7 @@ extern "C" int stockfish_thread_wrapper(int pipe_in, int pipe_out, int argc, cha
   tune.init();
   PSQT::init();
   Bitboards::init();
-  Position::init();
+  ptb.init();
   Threads.set(size_t(Options["Threads"]));
   Search::clear(&Threads); // After threads are up
   Eval::NNUE::init(Options);
@@ -213,12 +214,13 @@ int main(int argc, char* argv[]) {
   //It introduces circular reference, and potentially creates risks during destruction where options
   //may have reference to already deleted ThreadPool. It seems to be ok, as Options are not used
   //after we exit from UCI::loop
+  PositionTables ptb;
   Search::LimitsType Limits;
   TranspositionTable TT; // Our global TranspositionTable
   UCI::OptionsMap Options; // Global object
   TimeManagement Time;// Our global time management object
   Tablebases::Tablebases tb;
-  ThreadPool Threads(&Time, &Options, &TT, &Limits, &tb); // Global object
+  ThreadPool Threads(&Time, &Options, &TT, &Limits, &tb, &ptb); // Global object
   Tune tune(&Threads);
 
 
@@ -230,7 +232,7 @@ int main(int argc, char* argv[]) {
   tune.init();
   PSQT::init();
   Bitboards::init();
-  Position::init();
+  ptb.init();
   Threads.set(size_t(Options["Threads"]));
   Search::clear(&Threads); // After threads are up
   Eval::NNUE::init(Options);
