@@ -171,7 +171,7 @@ void Search::clear(ThreadPool* threads) {
   threads->time()->availableNodes = 0;
   threads->tt()->clear(threads->options());
   threads->clear();
-  Tablebases::init((*threads->options())["SyzygyPath"]); // Free mapped files
+  threads->tb()->init(threads, (*threads->options())["SyzygyPath"]); // Free mapped files
 }
 
 
@@ -664,7 +664,7 @@ namespace {
             && !pos.can_castle(ANY_CASTLING))
         {
             TB::ProbeState err;
-            TB::WDLScore wdl = Tablebases::probe_wdl(pos, &err);
+            TB::WDLScore wdl = threads->tb()->probe_wdl(pos, &err);
 
             // Force check of time on the next occasion
             if (thisThread == threads->main())
@@ -797,7 +797,7 @@ namespace {
         ss->currentMove = MOVE_NULL;
         ss->continuationHistory = &thisThread->continuationHistory[0][0][NO_PIECE][0];
 
-        pos.do_null_move(thisThread->threads()->tt(), st);
+        pos.do_null_move(st);
 
         Value nullValue = -search<NonPV>(pos, ss+1, -beta, -beta+1, depth-R, !cutNode);
 
@@ -1946,7 +1946,7 @@ bool RootMove::extract_ponder_from_tt(Position& pos) {
     return pv.size() > 1;
 }
 
-void Tablebases::rank_root_moves(UCI::OptionsMap *options, Position& pos, Stockfish::Search::RootMoves& rootMoves) {
+void Tablebases::Tablebases::rank_root_moves(UCI::OptionsMap *options, Position& pos, Stockfish::Search::RootMoves& rootMoves) {
 
     RootInTB = false;
     UseRule50 = bool((*options)["Syzygy50MoveRule"]);

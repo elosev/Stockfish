@@ -84,7 +84,7 @@ namespace {
   void trace_eval(Position& pos, ThreadPool *threads) {
 
     StateListPtr states(new std::deque<StateInfo>(1));
-    Position p;
+    Position p(threads);
     p.set(pos.fen(), (*threads->options())["UCI_Chess960"], &states->back(), threads->main());
 
     Eval::NNUE::verify(*threads->options());
@@ -237,7 +237,7 @@ namespace UCI {
 
 void UCI::loop(int argc, char* argv[], ThreadPool *threads) {
 
-  Position pos;
+  Position pos(threads);
   string token, cmd;
   StateListPtr states(new std::deque<StateInfo>(1));
 

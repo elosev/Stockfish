@@ -34,7 +34,7 @@ namespace Stockfish {
 /// in idle_loop(). Note that 'searching' and 'exit' should be already set.
 
 Thread::Thread(ThreadPool *threads, size_t n) 
-  : idx(n), stdThread(&Thread::idle_loop, this), _threads(threads) {
+  : idx(n), stdThread(&Thread::idle_loop, this), _threads(threads), rootPos(threads) {
 
   wait_for_search_finished();
 }
@@ -183,7 +183,7 @@ void ThreadPool::start_thinking(Position& pos, StateListPtr& states,
           rootMoves.emplace_back(m);
 
   if (!rootMoves.empty())
-      Tablebases::rank_root_moves(options(), pos, rootMoves);
+      _tb->rank_root_moves(options(), pos, rootMoves);
 
   // After ownership transfer 'states' becomes empty, so if we stop the search
   // and call 'go' again without setting a new position states.get() == nullptr.

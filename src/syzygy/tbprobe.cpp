@@ -51,13 +51,11 @@
 #include <windows.h>
 #endif
 
-using namespace Stockfish::Tablebases;
-
-int Stockfish::Tablebases::MaxCardinality;
+//using namespace Stockfish::Tablebases;
 
 namespace Stockfish {
 
-namespace {
+namespace Tablebases {
 
 constexpr int TBPIECES = 7; // Max number of supported pieces
 constexpr int MAX_DTZ = 1 << 18; // Max DTZ supported, large enough to deal with the syzygy TB limit.
@@ -73,17 +71,8 @@ inline Square operator^(Square s, int i) { return Square(int(s) ^ i); }
 
 constexpr std::string_view PieceToChar = " PNBRQK  pnbrqk";
 
-int MapPawns[SQUARE_NB];
-int MapB1H1H7[SQUARE_NB];
-int MapA1D1D4[SQUARE_NB];
-int MapKK[10][SQUARE_NB]; // [MapA1D1D4][SQUARE_NB]
-
-int Binomial[6][SQUARE_NB];    // [k][n] k elements from a set of n elements
-int LeadPawnIdx[6][SQUARE_NB]; // [leadPawnsCnt][SQUARE_NB]
-int LeadPawnsSize[6][4];       // [leadPawnsCnt][FILE_A..FILE_D]
 
 // Comparison function to sort leading pawns in ascending MapPawns[] order
-bool pawns_comp(Square i, Square j) { return MapPawns[i] < MapPawns[j]; }
 int off_A1H8(Square sq) { return int(rank_of(sq)) - file_of(sq); }
 
 constexpr Value WDL_to_value[] = {
@@ -179,16 +168,16 @@ public:
     //
     // Example:
     // C:\tb\wdl345;C:\tb\wdl6;D:\tb\dtz345;D:\tb\dtz6
-    static std::string Paths;
+    // elosev: Paths is passed in tb now during add
 
-    TBFile(const std::string& f) {
+    TBFile(const std::string& f, const std::string& paths) {
 
 #ifndef _WIN32
         constexpr char SepChar = ':';
 #else
         constexpr char SepChar = ';';
 #endif
-        std::stringstream ss(Paths);
+        std::stringstream ss(paths);
         std::string path;
 
         while (std::getline(ss, path, SepChar))
@@ -294,8 +283,6 @@ public:
     }
 };
 
-std::string TBFile::Paths;
-
 // struct PairsData contains low level indexing information to access TB data.
 // There are 8, 4 or 2 PairsData records for each TBTable, according to type of
 // table and if positions have pawns or not. It is populated at first access.
@@ -348,7 +335,7 @@ struct TBTable {
     }
 
     TBTable() : ready(false), baseAddress(nullptr) {}
-    explicit TBTable(const std::string& code);
+    explicit TBTable(ThreadPool *threads, const std::string& code);
     explicit TBTable(const TBTable<WDL>& wdl);
 
     ~TBTable() {
@@ -358,10 +345,10 @@ struct TBTable {
 };
 
 template<>
-TBTable<WDL>::TBTable(const std::string& code) : TBTable() {
+TBTable<WDL>::TBTable(ThreadPool *threads, const std::string& code) : TBTable() {
 
     StateInfo st;
-    Position pos;
+    Position pos(threads);
 
     key = pos.set(code, WHITE, &st).material_key();
     pieceCount = pos.count<ALL_PIECES>();
@@ -463,30 +450,28 @@ public:
         dtzTable.clear();
     }
     size_t size() const { return wdlTable.size(); }
-    void add(const std::vector<PieceType>& pieces);
+    void add(ThreadPool *threads, Tablebases *tb, const std::vector<PieceType>& pieces);
 };
-
-TBTables TBTables;
 
 // If the corresponding file exists two new objects TBTable<WDL> and TBTable<DTZ>
 // are created and added to the lists and hash table. Called at init time.
-void TBTables::add(const std::vector<PieceType>& pieces) {
+void TBTables::add(ThreadPool *threads, Tablebases *tb, const std::vector<PieceType>& pieces) {
 
     std::string code;
 
     for (PieceType pt : pieces)
         code += PieceToChar[pt];
 
-    TBFile file(code.insert(code.find('K', 1), "v") + ".rtbw"); // KRK -> KRvK
+    TBFile file(code.insert(code.find('K', 1), "v") + ".rtbw", tb->paths()); // KRK -> KRvK
 
     if (!file.is_open()) // Only WDL file is checked
         return;
 
     file.close();
 
-    MaxCardinality = std::max((int)pieces.size(), MaxCardinality);
+    tb->MaxCardinality = std::max((int)pieces.size(), tb->MaxCardinality);
 
-    wdlTable.emplace_back(code);
+    wdlTable.emplace_back(threads, code);
     dtzTable.emplace_back(wdlTable.back());
 
     // Insert into the hash keys for both colors: KRvK with KR white and black
@@ -670,7 +655,7 @@ int map_score(TBTable<DTZ>* entry, File f, int value, WDLScore wdl) {
 //      idx = Binomial[1][s1] + Binomial[2][s2] + ... + Binomial[k][sk]
 //
 template<typename T, typename Ret = typename T::Ret>
-Ret do_probe_table(const Position& pos, T* entry, WDLScore wdl, ProbeState* result) {
+Ret do_probe_table(Tablebases* tb, const Position& pos, T* entry, WDLScore wdl, ProbeState* result) {
 
     Square squares[TBPIECES];
     Piece pieces[TBPIECES];
@@ -714,7 +699,8 @@ Ret do_probe_table(const Position& pos, T* entry, WDLScore wdl, ProbeState* resu
 
         leadPawnsCnt = size;
 
-        std::swap(squares[0], *std::max_element(squares, squares + leadPawnsCnt, pawns_comp));
+        std::swap(squares[0], *std::max_element(squares, squares + leadPawnsCnt, 
+            [tb](auto i, auto j) { return tb->pawns_comp(i,j); } ));
 
         tbFile = File(edge_distance(file_of(squares[0])));
     }
@@ -758,12 +744,14 @@ Ret do_probe_table(const Position& pos, T* entry, WDLScore wdl, ProbeState* resu
     // Encode leading pawns starting with the one with minimum MapPawns[] and
     // proceeding in ascending order.
     if (entry->hasPawns) {
-        idx = LeadPawnIdx[leadPawnsCnt][squares[0]];
+        idx = tb->LeadPawnIdx[leadPawnsCnt][squares[0]];
 
-        std::stable_sort(squares + 1, squares + leadPawnsCnt, pawns_comp);
+        std::stable_sort(squares + 1, squares + leadPawnsCnt, 
+            [tb](auto i, auto j) { return tb->pawns_comp(i,j); } 
+            );
 
         for (int i = 1; i < leadPawnsCnt; ++i)
-            idx += Binomial[i][MapPawns[squares[i]]];
+            idx += tb->Binomial[i][tb->MapPawns[squares[i]]];
 
         goto encode_remaining; // With pawns we have finished special treatments
     }
@@ -822,7 +810,7 @@ Ret do_probe_table(const Position& pos, T* entry, WDLScore wdl, ProbeState* resu
         // triangle to 0...5. There are 63 squares for second piece and and 62
         // (mapped to 0...61) for the third.
         if (off_A1H8(squares[0]))
-            idx = (   MapA1D1D4[squares[0]]  * 63
+            idx = (   tb->MapA1D1D4[squares[0]]  * 63
                    + (squares[1] - adjust1)) * 62
                    +  squares[2] - adjust2;
 
@@ -831,7 +819,7 @@ Ret do_probe_table(const Position& pos, T* entry, WDLScore wdl, ProbeState* resu
         // to 0...3 and finally MapB1H1H7[] maps the b1-h1-h7 triangle to 0..27.
         else if (off_A1H8(squares[1]))
             idx = (  6 * 63 + rank_of(squares[0]) * 28
-                   + MapB1H1H7[squares[1]])       * 62
+                   + tb->MapB1H1H7[squares[1]])       * 62
                    + squares[2] - adjust2;
 
         // First two pieces are on a1-h8 diagonal, third below
@@ -839,7 +827,7 @@ Ret do_probe_table(const Position& pos, T* entry, WDLScore wdl, ProbeState* resu
             idx =  6 * 63 * 62 + 4 * 28 * 62
                  +  rank_of(squares[0])        * 7 * 28
                  + (rank_of(squares[1]) - adjust1) * 28
-                 +  MapB1H1H7[squares[2]];
+                 +  tb->MapB1H1H7[squares[2]];
 
         // All 3 pieces on the diagonal a1-h8
         else
@@ -850,7 +838,7 @@ Ret do_probe_table(const Position& pos, T* entry, WDLScore wdl, ProbeState* resu
     } else
         // We don't have at least 3 unique pieces, like in KRRvKBB, just map
         // the kings.
-        idx = MapKK[MapA1D1D4[squares[0]]][squares[1]];
+        idx = tb->MapKK[tb->MapA1D1D4[squares[0]]][squares[1]];
 
 encode_remaining:
     idx *= d->groupIdx[0];
@@ -870,7 +858,7 @@ encode_remaining:
         {
             auto f = [&](Square s) { return groupSq[i] > s; };
             auto adjust = std::count_if(squares, groupSq, f);
-            n += Binomial[i + 1][groupSq[i] - adjust - 8 * remainingPawns];
+            n += tb->Binomial[i + 1][groupSq[i] - adjust - 8 * remainingPawns];
         }
 
         remainingPawns = false;
@@ -893,7 +881,7 @@ encode_remaining:
 // The actual grouping depends on the TB generator and can be inferred from the
 // sequence of pieces in piece[] array.
 template<typename T>
-void set_groups(T& e, PairsData* d, int order[], File f) {
+void set_groups(Tablebases *tb, T& e, PairsData* d, int order[], File f) {
 
     int n = 0, firstLen = e.hasPawns ? 0 : e.hasUniquePieces ? 3 : 2;
     d->groupLen[n] = 1;
@@ -928,18 +916,18 @@ void set_groups(T& e, PairsData* d, int order[], File f) {
         if (k == order[0]) // Leading pawns or pieces
         {
             d->groupIdx[0] = idx;
-            idx *=         e.hasPawns ? LeadPawnsSize[d->groupLen[0]][f]
+            idx *=         e.hasPawns ? tb->LeadPawnsSize[d->groupLen[0]][f]
                   : e.hasUniquePieces ? 31332 : 462;
         }
         else if (k == order[1]) // Remaining pawns
         {
             d->groupIdx[1] = idx;
-            idx *= Binomial[d->groupLen[1]][48 - d->groupLen[0]];
+            idx *= tb->Binomial[d->groupLen[1]][48 - d->groupLen[0]];
         }
         else // Remaining pieces
         {
             d->groupIdx[next] = idx;
-            idx *= Binomial[d->groupLen[next]][freeSquares];
+            idx *= tb->Binomial[d->groupLen[next]][freeSquares];
             freeSquares -= d->groupLen[next++];
         }
 
@@ -1064,7 +1052,7 @@ uint8_t* set_dtz_map(TBTable<DTZ>& e, uint8_t* data, File maxFile) {
 // Populate entry's PairsData records with data from the just memory mapped file.
 // Called at first access.
 template<typename T>
-void set(T& e, uint8_t* data) {
+void set(Tablebases *tb, T& e, uint8_t* data) {
 
     PairsData* d;
 
@@ -1096,7 +1084,7 @@ void set(T& e, uint8_t* data) {
                 e.get(i, f)->pieces[k] = Piece(i ? *data >>  4 : *data & 0xF);
 
         for (int i = 0; i < sides; ++i)
-            set_groups(e, e.get(i, f), order[i], f);
+            set_groups(tb, e, e.get(i, f), order[i], f);
     }
 
     data += (uintptr_t)data & 1; // Word alignment
@@ -1132,7 +1120,7 @@ void set(T& e, uint8_t* data) {
 // at every probe, memory map and init only at first access. Function is thread
 // safe and can be called concurrently.
 template<TBType Type>
-void* mapped(TBTable<Type>& e, const Position& pos) {
+void* mapped(Tablebases* tb, TBTable<Type>& e, const Position& pos) {
 
     static std::mutex mutex;
 
@@ -1156,27 +1144,27 @@ void* mapped(TBTable<Type>& e, const Position& pos) {
     fname =  (e.key == pos.material_key() ? w + 'v' + b : b + 'v' + w)
            + (Type == WDL ? ".rtbw" : ".rtbz");
 
-    uint8_t* data = TBFile(fname).map(&e.baseAddress, &e.mapping, Type);
+    uint8_t* data = TBFile(fname, tb->paths()).map(&e.baseAddress, &e.mapping, Type);
 
     if (data)
-        set(e, data);
+        set(tb, e, data);
 
     e.ready.store(true, std::memory_order_release);
     return e.baseAddress;
 }
 
 template<TBType Type, typename Ret = typename TBTable<Type>::Ret>
-Ret probe_table(const Position& pos, ProbeState* result, WDLScore wdl = WDLDraw) {
+Ret probe_table(Tablebases* tb, const Position& pos, ProbeState* result, WDLScore wdl = WDLDraw) {
 
     if (pos.count<ALL_PIECES>() == 2) // KvK
         return Ret(WDLDraw);
 
-    TBTable<Type>* entry = TBTables.get<Type>(pos.material_key());
+    TBTable<Type>* entry = tb->tb_tables()->get<Type>(pos.material_key());
 
-    if (!entry || !mapped(*entry, pos))
+    if (!entry || !mapped(tb, *entry, pos))
         return *result = FAIL, Ret();
 
-    return do_probe_table(pos, entry, wdl, result);
+    return do_probe_table(tb, pos, entry, wdl, result);
 }
 
 // For a position where the side to move has a winning capture it is not necessary
@@ -1193,7 +1181,7 @@ Ret probe_table(const Position& pos, ProbeState* result, WDLScore wdl = WDLDraw)
 // where the best move is an ep-move (even if losing). So in all these cases set
 // the state to ZEROING_BEST_MOVE.
 template<bool CheckZeroingMoves>
-WDLScore search(Position& pos, ProbeState* result) {
+WDLScore search(Tablebases *tb, Position& pos, ProbeState* result) {
 
     WDLScore value, bestValue = WDLLoss;
     StateInfo st;
@@ -1210,7 +1198,7 @@ WDLScore search(Position& pos, ProbeState* result) {
         moveCount++;
 
         pos.do_move(move, st);
-        value = -search<false>(pos, result);
+        value = -search<false>(tb, pos, result);
         pos.undo_move(move);
 
         if (*result == FAIL)
@@ -1240,7 +1228,7 @@ WDLScore search(Position& pos, ProbeState* result) {
         value = bestValue;
     else
     {
-        value = probe_table<WDL>(pos, result);
+        value = probe_table<WDL>(tb, pos, result);
 
         if (*result == FAIL)
             return WDLDraw;
@@ -1254,17 +1242,28 @@ WDLScore search(Position& pos, ProbeState* result) {
     return *result = OK, value;
 }
 
-} // namespace
+Tablebases::Tablebases()
+  :_tb_tables(new TBTables()) {
+    memset(MapPawns, 0, sizeof(MapPawns));
+    memset(MapB1H1H7, 0, sizeof(MapB1H1H7));
+    memset(MapA1D1D4, 0, sizeof(MapA1D1D4));
+    memset(MapKK, 0, sizeof(MapKK));
 
+    memset(Binomial, 0, sizeof(Binomial));
+    memset(LeadPawnIdx, 0, sizeof(LeadPawnIdx));
+    memset(LeadPawnsSize, 0, sizeof(LeadPawnsSize));
+}
+
+Tablebases::~Tablebases() {}
 
 /// Tablebases::init() is called at startup and after every change to
 /// "SyzygyPath" UCI option to (re)create the various tables. It is not thread
 /// safe, nor it needs to be.
-void Tablebases::init(const std::string& paths) {
+void Tablebases::init(ThreadPool *threads, const std::string& paths) {
 
-    TBTables.clear();
+    _tb_tables->clear();
     MaxCardinality = 0;
-    TBFile::Paths = paths;
+    _paths = paths;
 
     if (paths.empty() || paths == "<empty>")
         return;
@@ -1365,43 +1364,43 @@ void Tablebases::init(const std::string& paths) {
 
     // Add entries in TB tables if the corresponding ".rtbw" file exists
     for (PieceType p1 = PAWN; p1 < KING; ++p1) {
-        TBTables.add({KING, p1, KING});
+        _tb_tables->add(threads, this, {KING, p1, KING});
 
         for (PieceType p2 = PAWN; p2 <= p1; ++p2) {
-            TBTables.add({KING, p1, p2, KING});
-            TBTables.add({KING, p1, KING, p2});
+            _tb_tables->add(threads, this, {KING, p1, p2, KING});
+            _tb_tables->add(threads, this, {KING, p1, KING, p2});
 
             for (PieceType p3 = PAWN; p3 < KING; ++p3)
-                TBTables.add({KING, p1, p2, KING, p3});
+                _tb_tables->add(threads, this, {KING, p1, p2, KING, p3});
 
             for (PieceType p3 = PAWN; p3 <= p2; ++p3) {
-                TBTables.add({KING, p1, p2, p3, KING});
+                _tb_tables->add(threads, this, {KING, p1, p2, p3, KING});
 
                 for (PieceType p4 = PAWN; p4 <= p3; ++p4) {
-                    TBTables.add({KING, p1, p2, p3, p4, KING});
+                    _tb_tables->add(threads, this, {KING, p1, p2, p3, p4, KING});
 
                     for (PieceType p5 = PAWN; p5 <= p4; ++p5)
-                        TBTables.add({KING, p1, p2, p3, p4, p5, KING});
+                        _tb_tables->add(threads, this, {KING, p1, p2, p3, p4, p5, KING});
 
                     for (PieceType p5 = PAWN; p5 < KING; ++p5)
-                        TBTables.add({KING, p1, p2, p3, p4, KING, p5});
+                        _tb_tables->add(threads, this, {KING, p1, p2, p3, p4, KING, p5});
                 }
 
                 for (PieceType p4 = PAWN; p4 < KING; ++p4) {
-                    TBTables.add({KING, p1, p2, p3, KING, p4});
+                    _tb_tables->add(threads, this, {KING, p1, p2, p3, KING, p4});
 
                     for (PieceType p5 = PAWN; p5 <= p4; ++p5)
-                        TBTables.add({KING, p1, p2, p3, KING, p4, p5});
+                        _tb_tables->add(threads, this, {KING, p1, p2, p3, KING, p4, p5});
                 }
             }
 
             for (PieceType p3 = PAWN; p3 <= p1; ++p3)
                 for (PieceType p4 = PAWN; p4 <= (p1 == p3 ? p2 : p3); ++p4)
-                    TBTables.add({KING, p1, p2, KING, p3, p4});
+                    _tb_tables->add(threads, this, {KING, p1, p2, KING, p3, p4});
         }
     }
 
-    sync_cout << "info string Found " << TBTables.size() << " tablebases" << sync_endl;
+    sync_cout << "info string Found " << _tb_tables->size() << " tablebases" << sync_endl;
 }
 
 // Probe the WDL table for a particular position.
@@ -1415,7 +1414,7 @@ void Tablebases::init(const std::string& paths) {
 WDLScore Tablebases::probe_wdl(Position& pos, ProbeState* result) {
 
     *result = OK;
-    return search<false>(pos, result);
+    return search<false>(this, pos, result);
 }
 
 // Probe the DTZ table for a particular position.
@@ -1447,7 +1446,7 @@ WDLScore Tablebases::probe_wdl(Position& pos, ProbeState* result) {
 int Tablebases::probe_dtz(Position& pos, ProbeState* result) {
 
     *result = OK;
-    WDLScore wdl = search<true>(pos, result);
+    WDLScore wdl = search<true>(this, pos, result);
 
     if (*result == FAIL || wdl == WDLDraw) // DTZ tables don't store draws
         return 0;
@@ -1457,7 +1456,7 @@ int Tablebases::probe_dtz(Position& pos, ProbeState* result) {
     if (*result == ZEROING_BEST_MOVE)
         return dtz_before_zeroing(wdl);
 
-    int dtz = probe_table<DTZ>(pos, result, wdl);
+    int dtz = probe_table<DTZ>(this, pos, result, wdl);
 
     if (*result == FAIL)
         return 0;
@@ -1480,7 +1479,7 @@ int Tablebases::probe_dtz(Position& pos, ProbeState* result) {
         // otherwise we will get the dtz of the next move sequence. Search the
         // position after the move to get the score sign (because even in a
         // winning position we could make a losing capture or going for a draw).
-        dtz = zeroing ? -dtz_before_zeroing(search<false>(pos, result))
+        dtz = zeroing ? -dtz_before_zeroing(search<false>(this, pos, result))
                       : -probe_dtz(pos, result);
 
         // If the move mates, force minDTZ to 1
@@ -1583,6 +1582,7 @@ bool Tablebases::root_probe(UCI::OptionsMap* options,Position& pos, Search::Root
 }
 
 
+
 // Use the WDL tables to rank root moves.
 // This is a fallback for the case that some or all DTZ tables are missing.
 //
@@ -1622,5 +1622,7 @@ bool Tablebases::root_probe_wdl(UCI::OptionsMap* options,Position& pos, Search::
 
     return true;
 }
+
+}//namespace Tablebases
 
 } // namespace Stockfish

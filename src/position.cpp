@@ -76,17 +76,17 @@ std::ostream& operator<<(std::ostream& os, const Position& pos) {
   for (Bitboard b = pos.checkers(); b; )
       os << UCI::square(pop_lsb(b)) << " ";
 
-  if (    int(Tablebases::MaxCardinality) >= popcount(pos.pieces())
+  if (    int(pos.threads()->tb()->MaxCardinality) >= popcount(pos.pieces())
       && !pos.can_castle(ANY_CASTLING))
   {
       StateInfo st;
       ASSERT_ALIGNED(&st, Eval::NNUE::CacheLineSize);
 
-      Position p;
+      Position p(pos.threads());
       p.set(pos.fen(), pos.is_chess960(), &st, pos.this_thread());
       Tablebases::ProbeState s1, s2;
-      Tablebases::WDLScore wdl = Tablebases::probe_wdl(p, &s1);
-      int dtz = Tablebases::probe_dtz(p, &s2);
+      Tablebases::WDLScore wdl = p.threads()->tb()->probe_wdl(p, &s1);
+      int dtz = p.threads()->tb()->probe_dtz(p, &s2);
       os << "\nTablebases WDL: " << std::setw(4) << wdl << " (" << s1 << ")"
          << "\nTablebases DTZ: " << std::setw(4) << dtz << " (" << s2 << ")";
   }
@@ -197,8 +197,10 @@ Position& Position::set(const string& fenStr, bool isChess960, StateInfo* si, Th
   Square sq = SQ_A8;
   std::istringstream ss(fenStr);
 
+  ThreadPool* old_threads = this->_threads;
   std::memset(this, 0, sizeof(Position));
   std::memset(si, 0, sizeof(StateInfo));
+  this->_threads = old_threads;
   st = si;
 
   ss >> std::noskipws;
@@ -964,7 +966,7 @@ void Position::do_castling(Color us, Square from, Square& to, Square& rfrom, Squ
 /// Position::do_null_move() is used to do a "null move": it flips
 /// the side to move without executing any move on the board.
 
-void Position::do_null_move(TranspositionTable *tt, StateInfo& newSt) {
+void Position::do_null_move(StateInfo& newSt) {
 
   assert(!checkers());
   assert(&newSt != st);
@@ -987,7 +989,7 @@ void Position::do_null_move(TranspositionTable *tt, StateInfo& newSt) {
 
   st->key ^= Zobrist::side;
   ++st->rule50;
-  prefetch(tt->first_entry(key()));
+  prefetch(_threads->tt()->first_entry(key()));
 
   st->pliesFromNull = 0;
 

@@ -20,6 +20,7 @@
 #define TBPROBE_H
 
 #include <ostream>
+#include <utility>
 
 #include "../search.h"
 
@@ -47,14 +48,45 @@ enum ProbeState {
     ZEROING_BEST_MOVE =  2  // Best move zeroes DTZ (capture or pawn move)
 };
 
-extern int MaxCardinality;
+class TBTables;
+struct Tablebases {
+  Tablebases();
+  ~Tablebases();
 
-void init(const std::string& paths);
-WDLScore probe_wdl(Position& pos, ProbeState* result);
-int probe_dtz(Position& pos, ProbeState* result);
-bool root_probe(UCI::OptionsMap* options,Position& pos, Search::RootMoves& rootMoves);
-bool root_probe_wdl(UCI::OptionsMap* options,Position& pos, Search::RootMoves& rootMoves);
-void rank_root_moves(UCI::OptionsMap* options, Position& pos, Search::RootMoves& rootMoves);
+  void init(ThreadPool *threads, const std::string& paths);
+
+  int MaxCardinality;
+
+  TBTables* tb_tables() {
+    return _tb_tables.get();
+  }
+
+  const std::string& paths() const {
+    return _paths;
+  }
+
+  WDLScore probe_wdl(Position& pos, ProbeState* result);
+  int probe_dtz(Position& pos, ProbeState* result);
+  bool root_probe(UCI::OptionsMap* options,Position& pos, Search::RootMoves& rootMoves);
+  bool root_probe_wdl(UCI::OptionsMap* options,Position& pos, Search::RootMoves& rootMoves);
+  void rank_root_moves(UCI::OptionsMap* options, Position& pos, Search::RootMoves& rootMoves);
+
+  bool pawns_comp(Square i, Square j) { return MapPawns[i] < MapPawns[j]; }
+
+  int MapPawns[SQUARE_NB];
+  int MapB1H1H7[SQUARE_NB];
+  int MapA1D1D4[SQUARE_NB];
+  int MapKK[10][SQUARE_NB]; // [MapA1D1D4][SQUARE_NB]
+
+  int Binomial[6][SQUARE_NB];    // [k][n] k elements from a set of n elements
+  int LeadPawnIdx[6][SQUARE_NB]; // [leadPawnsCnt][SQUARE_NB]
+  int LeadPawnsSize[6][4];       // [leadPawnsCnt][FILE_A..FILE_D]
+
+private:
+  std::unique_ptr<TBTables> _tb_tables; 
+  std::string _paths;
+};
+
 
 inline std::ostream& operator<<(std::ostream& os, const WDLScore v) {
 

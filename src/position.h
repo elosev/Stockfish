@@ -81,8 +81,10 @@ class Thread;
 class Position {
 public:
   static void init();
-
-  Position() = default;
+  Position() = delete;
+  explicit Position(ThreadPool *threads): _threads(threads) {
+    assert(_threads);
+  }
   Position(const Position&) = delete;
   Position& operator=(const Position&) = delete;
 
@@ -134,7 +136,7 @@ public:
   void do_move(Move m, StateInfo& newSt);
   void do_move(Move m, StateInfo& newSt, bool givesCheck);
   void undo_move(Move m);
-  void do_null_move(TranspositionTable *tt, StateInfo& newSt);
+  void do_null_move(StateInfo& newSt);
   void undo_null_move();
 
   // Static Exchange Evaluation
@@ -169,6 +171,8 @@ public:
   void put_piece(Piece pc, Square s);
   void remove_piece(Square s);
 
+  ThreadPool* threads() const { return _threads; }
+
 private:
   // Initialization helpers (used while setting up a position)
   void set_castling_right(Color c, Square rfrom);
@@ -196,6 +200,7 @@ private:
   Color sideToMove;
   Score psq;
   bool chess960;
+  ThreadPool *_threads;
 };
 
 std::ostream& operator<<(std::ostream& os, const Position& pos);

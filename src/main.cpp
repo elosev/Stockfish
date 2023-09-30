@@ -50,7 +50,8 @@ extern "C" int stockfish_thread_wrapper(int pipe_in, int pipe_out, int argc, cha
   TranspositionTable TT; // Our global TranspositionTable
   UCI::OptionsMap Options; // Global object
   TimeManagement Time;// Our global time management object
-  ThreadPool Threads(&Time, &Options, &TT, &Limits); // Global object
+  Tablebases::Tablebases tb;
+  ThreadPool Threads(&Time, &Options, &TT, &Limits, &tb); // Global object
   Tune tune(&Threads);
 
   //end
@@ -216,7 +217,8 @@ int main(int argc, char* argv[]) {
   TranspositionTable TT; // Our global TranspositionTable
   UCI::OptionsMap Options; // Global object
   TimeManagement Time;// Our global time management object
-  ThreadPool Threads(&Time, &Options, &TT, &Limits); // Global object
+  Tablebases::Tablebases tb;
+  ThreadPool Threads(&Time, &Options, &TT, &Limits, &tb); // Global object
   Tune tune(&Threads);
 
 

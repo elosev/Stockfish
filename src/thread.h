@@ -40,6 +40,10 @@ namespace Stockfish {
     struct LimitsType;
   }
 
+  namespace Tablebases {
+    struct Tablebases;
+  }
+
 /// Thread class keeps together all the thread-related stuff. We use
 /// per-thread pawn and material hash tables so that once we get a
 /// pointer to an entry its life time is unlimited and we don't have
@@ -109,8 +113,9 @@ struct MainThread : public Thread {
 
 struct ThreadPool {
 
-  ThreadPool(TimeManagement *time, UCI::OptionsMap *options, TranspositionTable *tt, Search::LimitsType *limits) 
-    : _time(time), _options(options), _tt(tt), _limits(limits) {}
+  ThreadPool(TimeManagement *time, UCI::OptionsMap *options, TranspositionTable *tt, Search::LimitsType *limits, 
+      Tablebases::Tablebases *tb) 
+    : _time(time), _options(options), _tt(tt), _limits(limits), _tb(tb) {}
   void start_thinking(Position&, StateListPtr&, const Search::LimitsType&, bool = false);
   void clear();
   void set(size_t);
@@ -135,6 +140,7 @@ struct ThreadPool {
   UCI::OptionsMap* options() { return _options; }
   TranspositionTable* tt() { return _tt; }
   Search::LimitsType* limits() { return _limits; }
+  Tablebases::Tablebases* tb() { return _tb; }
 
 private:
   StateListPtr setupStates;
@@ -143,6 +149,7 @@ private:
   UCI::OptionsMap *_options;
   TranspositionTable *_tt;
   Search::LimitsType *_limits;
+  Tablebases::Tablebases *_tb;
 
   uint64_t accumulate(std::atomic<uint64_t> Thread::* member) const {
 
