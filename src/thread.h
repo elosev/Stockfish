@@ -43,6 +43,7 @@ namespace Stockfish {
 
 struct ThreadPool;
 class TimeManagement;
+class TranspositionTable;
 class Thread {
 
   std::mutex mutex;
@@ -51,9 +52,8 @@ class Thread {
   bool exit = false, searching = true; // Set before starting std::thread
   NativeThread stdThread;
   ThreadPool *_threads;
-  UCI::OptionsMap *_options;
 public:
-  explicit Thread(ThreadPool*, UCI::OptionsMap*, size_t);
+  explicit Thread(ThreadPool*, size_t);
   virtual ~Thread();
   virtual void search();
   void clear();
@@ -62,7 +62,6 @@ public:
   void wait_for_search_finished();
   size_t id() const { return idx; }
   ThreadPool* threads() { return this->_threads; }
-  UCI::OptionsMap* options() { return this->_options; }
 
   size_t pvIdx, pvLast;
   std::atomic<uint64_t> nodes, tbHits, bestMoveChanges;
@@ -106,7 +105,8 @@ struct MainThread : public Thread {
 
 struct ThreadPool {
 
-  ThreadPool(TimeManagement *time, UCI::OptionsMap *options) : _time(time), _options(options) {}
+  ThreadPool(TimeManagement *time, UCI::OptionsMap *options, TranspositionTable *tt) 
+    : _time(time), _options(options), _tt(tt) {}
   void start_thinking(Position&, StateListPtr&, const Search::LimitsType&, bool = false);
   void clear();
   void set(size_t);
@@ -129,12 +129,14 @@ struct ThreadPool {
 
   TimeManagement* time() { return _time; }
   UCI::OptionsMap* options() { return _options; }
+  TranspositionTable* tt() { return _tt; }
 
 private:
   StateListPtr setupStates;
   std::vector<Thread*> threads;
   TimeManagement *_time;
   UCI::OptionsMap *_options;
+  TranspositionTable *_tt;
 
   uint64_t accumulate(std::atomic<uint64_t> Thread::* member) const {
 

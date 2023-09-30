@@ -173,7 +173,7 @@ void Search::clear(ThreadPool* threads) {
   threads->main()->wait_for_search_finished();
 
   threads->time()->availableNodes = 0;
-  TT.clear(threads->options());
+  threads->tt()->clear(threads->options());
   threads->clear();
   Tablebases::init((*threads->options())["SyzygyPath"]); // Free mapped files
 }
@@ -197,7 +197,7 @@ void MainThread::search() {
 
   Color us = rootPos.side_to_move();
   time->init(options, Limits, us, rootPos.game_ply());
-  TT.new_search();
+  threads->tt()->new_search();
 
   Eval::NNUE::verify(*options);
 
@@ -306,8 +306,8 @@ void Thread::search() {
               mainThread->iterValue[i] = mainThread->bestPreviousScore;
   }
 
-  size_t multiPV = size_t((*options())["MultiPV"]);
-  Skill skill((*options())["Skill Level"], (*options())["UCI_LimitStrength"] ? int((*options())["UCI_Elo"]) : 0);
+  size_t multiPV = size_t((*threads()->options())["MultiPV"]);
+  Skill skill((*threads()->options())["Skill Level"], (*threads()->options())["UCI_LimitStrength"] ? int((*threads()->options())["UCI_Elo"]) : 0);
 
   // When playing with strength handicap enable MultiPV search that we will
   // use behind-the-scenes to retrieve a set of possible moves.
@@ -610,7 +610,7 @@ namespace {
     // Step 4. Transposition table lookup.
     excludedMove = ss->excludedMove;
     posKey = pos.key();
-    tte = TT.probe(posKey, ss->ttHit);
+    tte = threads->tt()->probe(posKey, ss->ttHit);
     ttValue = ss->ttHit ? value_from_tt(tte->value(), ss->ply, pos.rule50_count()) : VALUE_NONE;
     ttMove =  rootNode ? thisThread->rootMoves[thisThread->pvIdx].pv[0]
             : ss->ttHit    ? tte->move() : MOVE_NONE;
@@ -690,7 +690,7 @@ namespace {
                 if (    b == BOUND_EXACT
                     || (b == BOUND_LOWER ? value >= beta : value <= alpha))
                 {
-                    tte->save(posKey, value_to_tt(value, ss->ply), ss->ttPv, b,
+                    tte->save(threads->tt(), posKey, value_to_tt(value, ss->ply), ss->ttPv, b,
                               std::min(MAX_PLY - 1, depth + 6),
                               MOVE_NONE, VALUE_NONE);
 
@@ -742,7 +742,7 @@ namespace {
     {
         ss->staticEval = eval = evaluate(pos);
         // Save static evaluation into the transposition table
-        tte->save(posKey, VALUE_NONE, ss->ttPv, BOUND_NONE, DEPTH_NONE, MOVE_NONE, eval);
+        tte->save(threads->tt(), posKey, VALUE_NONE, ss->ttPv, BOUND_NONE, DEPTH_NONE, MOVE_NONE, eval);
     }
 
     // Use static evaluation difference to improve quiet move ordering (~4 Elo)
@@ -800,7 +800,7 @@ namespace {
         ss->currentMove = MOVE_NULL;
         ss->continuationHistory = &thisThread->continuationHistory[0][0][NO_PIECE][0];
 
-        pos.do_null_move(st);
+        pos.do_null_move(thisThread->threads()->tt(), st);
 
         Value nullValue = -search<NonPV>(pos, ss+1, -beta, -beta+1, depth-R, !cutNode);
 
@@ -889,8 +889,8 @@ namespace {
                 if (value >= probCutBeta)
                 {
                     // Save ProbCut data into transposition table
-                    tte->save(posKey, value_to_tt(value, ss->ply), ss->ttPv, BOUND_LOWER, depth - 3, move, ss->staticEval);
-                    return value;
+                  tte->save(threads->tt(), posKey, value_to_tt(value, ss->ply), ss->ttPv, BOUND_LOWER, depth - 3, move, ss->staticEval);
+                  return value;
                 }
             }
 
@@ -1132,7 +1132,7 @@ moves_loop: // When in check, search starts here
       ss->doubleExtensions = (ss-1)->doubleExtensions + (extension == 2);
 
       // Speculative prefetch as early as possible
-      prefetch(TT.first_entry(pos.key_after(move)));
+      prefetch(threads->tt()->first_entry(pos.key_after(move)));
 
       // Update the current move (this must be done after singular extension search)
       ss->currentMove = move;
@@ -1393,7 +1393,7 @@ moves_loop: // When in check, search starts here
 
     // Write gathered information in transposition table
     if (!excludedMove && !(rootNode && thisThread->pvIdx))
-        tte->save(posKey, value_to_tt(bestValue, ss->ply), ss->ttPv,
+        tte->save(threads->tt(), posKey, value_to_tt(bestValue, ss->ply), ss->ttPv,
                   bestValue >= beta ? BOUND_LOWER :
                   PvNode && bestMove ? BOUND_EXACT : BOUND_UPPER,
                   depth, bestMove, ss->staticEval);
@@ -1456,7 +1456,7 @@ moves_loop: // When in check, search starts here
 
     // Step 3. Transposition table lookup
     posKey = pos.key();
-    tte = TT.probe(posKey, ss->ttHit);
+    tte = thisThread->threads()->tt()->probe(posKey, ss->ttHit);
     ttValue = ss->ttHit ? value_from_tt(tte->value(), ss->ply, pos.rule50_count()) : VALUE_NONE;
     ttMove = ss->ttHit ? tte->move() : MOVE_NONE;
     pvHit = ss->ttHit && tte->is_pv();
@@ -1494,7 +1494,7 @@ moves_loop: // When in check, search starts here
         {
             // Save gathered info in transposition table
             if (!ss->ttHit)
-                tte->save(posKey, value_to_tt(bestValue, ss->ply), false, BOUND_LOWER,
+                tte->save(thisThread->threads()->tt(), posKey, value_to_tt(bestValue, ss->ply), false, BOUND_LOWER,
                           DEPTH_NONE, MOVE_NONE, ss->staticEval);
 
             return bestValue;
@@ -1582,7 +1582,7 @@ moves_loop: // When in check, search starts here
         }
 
         // Speculative prefetch as early as possible
-        prefetch(TT.first_entry(pos.key_after(move)));
+        prefetch(thisThread->threads()->tt()->first_entry(pos.key_after(move)));
 
         // Update the current move
         ss->currentMove = move;
@@ -1631,7 +1631,7 @@ moves_loop: // When in check, search starts here
     }
 
     // Save gathered info in transposition table
-    tte->save(posKey, value_to_tt(bestValue, ss->ply), pvHit,
+    tte->save(thisThread->threads()->tt(), posKey, value_to_tt(bestValue, ss->ply), pvHit,
               bestValue >= beta ? BOUND_LOWER : BOUND_UPPER,
               ttDepth, bestMove, ss->staticEval);
 
@@ -1904,7 +1904,7 @@ string UCI::pv(const Position& pos, Depth depth, ThreadPool* threads) {
 
       ss << " nodes "    << nodesSearched
          << " nps "      << nodesSearched * 1000 / elapsed
-         << " hashfull " << TT.hashfull()
+         << " hashfull " << threads->tt()->hashfull()
          << " tbhits "   << tbHits
          << " time "     << elapsed
          << " pv";
@@ -1935,7 +1935,8 @@ bool RootMove::extract_ponder_from_tt(Position& pos) {
         return false;
 
     pos.do_move(pv[0], st);
-    TTEntry* tte = TT.probe(pos.key(), ttHit);
+    Thread *thisThread = pos.this_thread();
+    TTEntry* tte = thisThread->threads()->tt()->probe(pos.key(), ttHit);
 
     if (ttHit)
     {

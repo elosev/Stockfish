@@ -33,8 +33,8 @@ namespace Stockfish {
 /// Thread constructor launches the thread and waits until it goes to sleep
 /// in idle_loop(). Note that 'searching' and 'exit' should be already set.
 
-Thread::Thread(ThreadPool *threads, UCI::OptionsMap *options, size_t n) 
-  : idx(n), stdThread(&Thread::idle_loop, this), _threads(threads), _options(options) {
+Thread::Thread(ThreadPool *threads, size_t n) 
+  : idx(n), stdThread(&Thread::idle_loop, this), _threads(threads) {
 
   wait_for_search_finished();
 }
@@ -99,7 +99,7 @@ void Thread::idle_loop() {
   // some Windows NUMA hardware, for instance in fishtest. To make it simple,
   // just check if running threads are below a threshold, in this case all this
   // NUMA machinery is not needed.
-  if ((*_options)["Threads"] > 8)
+  if ((*_threads->options())["Threads"] > 8)
       WinProcGroup::bindThisThread(idx);
 
   while (true)
@@ -134,14 +134,14 @@ void ThreadPool::set(size_t requested) {
 
   if (requested > 0)   // create new thread(s)
   {
-      threads.push_back(new MainThread(this, _options, 0));
+      threads.push_back(new MainThread(this, 0));
 
       while (threads.size() < requested)
-          threads.push_back(new Thread(this, _options, threads.size()));
+          threads.push_back(new Thread(this, threads.size()));
       clear();
 
       // Reallocate the hash with the new threadpool size
-      TT.resize(size_t((*_options)["Hash"]), this);
+      _tt->resize(size_t((*_options)["Hash"]), this);
 
       // Init thread number dependent search params.
       Search::init(this);
