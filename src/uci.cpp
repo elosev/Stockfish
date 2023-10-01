@@ -87,7 +87,7 @@ namespace {
     Position p(threads);
     p.set(pos.fen(), (*threads->options())["UCI_Chess960"], &states->back(), threads->main());
 
-    Eval::NNUE::verify(*threads->options());
+    Eval::NNUE::verify(threads);
 
     sync_cout << "\n" << Eval::trace(p) << sync_endl;
   }

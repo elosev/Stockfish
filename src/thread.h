@@ -49,6 +49,8 @@ namespace Stockfish {
 
   struct PSQT;
 
+  struct CommandLine;
+
 
 
 /// Thread class keeps together all the thread-related stuff. We use
@@ -121,9 +123,9 @@ struct MainThread : public Thread {
 struct ThreadPool {
 
   ThreadPool(TimeManagement *time, UCI::OptionsMap *options, TranspositionTable *tt, Search::LimitsType *limits, 
-      Tablebases::Tablebases *tb, PositionTables *ptb, Search::Search *search, PSQT *psqt) 
+      Tablebases::Tablebases *tb, PositionTables *ptb, Search::Search *search, PSQT *psqt, CommandLine *cli) 
     : _time(time), _options(options), _tt(tt), _limits(limits), _tb(tb), _ptb(ptb), _search(search), 
-    _psqt(psqt) {}
+    _psqt(psqt), _cli(cli) {}
   void start_thinking(Position&, StateListPtr&, const Search::LimitsType&, bool = false);
   void clear();
   void set(size_t);
@@ -152,6 +154,7 @@ struct ThreadPool {
   PositionTables* ptb() { return _ptb; }
   Search::Search* search() { return _search; }
   PSQT* psqt() { return _psqt; }
+  CommandLine *cli() { return _cli; }
 
 private:
   StateListPtr setupStates;
@@ -164,6 +167,7 @@ private:
   PositionTables *_ptb;
   Search::Search *_search;
   PSQT *_psqt;
+  CommandLine *_cli;
 
   uint64_t accumulate(std::atomic<uint64_t> Thread::* member) const {
 

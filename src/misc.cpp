@@ -736,13 +736,8 @@ void bindThisThread(size_t idx) {
 #define GETCWD getcwd
 #endif
 
-namespace CommandLine {
 
-string argv0;            // path+name of the executable binary, as given by argv[0]
-string binaryDirectory;  // path of the executable directory
-string workingDirectory; // path of the working directory
-
-void init([[maybe_unused]] int argc, char* argv[]) {
+void CommandLine::init([[maybe_unused]] int argc, char* argv[]) {
     string pathSeparator;
 
     // extract the path+name of the executable binary
@@ -781,7 +776,5 @@ void init([[maybe_unused]] int argc, char* argv[]) {
         binaryDirectory.replace(0, 1, workingDirectory);
 }
 
-
-} // namespace CommandLine
 
 } // namespace Stockfish

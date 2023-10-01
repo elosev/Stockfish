@@ -46,8 +46,8 @@ namespace Eval {
 
   namespace NNUE {
 
-    void init(UCI::OptionsMap& options);
-    void verify(UCI::OptionsMap& options);
+    void init(ThreadPool *threads);
+    void verify(ThreadPool *threads);
 
   } // namespace NNUE
 

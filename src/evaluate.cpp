@@ -66,16 +66,16 @@ namespace Eval {
   /// in the engine directory. Distro packagers may define the DEFAULT_NNUE_DIRECTORY
   /// variable to have the engine search in a special directory in their distro.
 
-  void NNUE::init(UCI::OptionsMap &options) {
+  void NNUE::init(ThreadPool *threads) {
 
-    string eval_file = string(options["EvalFile"]);
+    string eval_file = string((*threads->options())["EvalFile"]);
     if (eval_file.empty())
         eval_file = EvalFileDefaultName;
 
     #if defined(DEFAULT_NNUE_DIRECTORY)
-    vector<string> dirs = { "<internal>" , "" , CommandLine::binaryDirectory , stringify(DEFAULT_NNUE_DIRECTORY) };
+    vector<string> dirs = { "<internal>" , "" , threads->cli()->binaryDirectory , stringify(DEFAULT_NNUE_DIRECTORY) };
     #else
-    vector<string> dirs = { "<internal>" , "" , CommandLine::binaryDirectory };
+    vector<string> dirs = { "<internal>" , "" , threads->cli()->binaryDirectory };
     #endif
 
     for (const string& directory : dirs)
@@ -107,9 +107,9 @@ namespace Eval {
   }
 
   /// NNUE::verify() verifies that the last net used was loaded successfully
-  void NNUE::verify(UCI::OptionsMap& options) {
+  void NNUE::verify(ThreadPool *threads) {
 
-    string eval_file = string(options["EvalFile"]);
+    string eval_file = string((*threads->options())["EvalFile"]);
     if (eval_file.empty())
         eval_file = EvalFileDefaultName;
 

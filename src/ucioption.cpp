@@ -42,7 +42,7 @@ static void on_hash_size(const Option& o) { o.threads()->tt()->resize(size_t(o),
 static void on_logger(const Option& o) { start_logger(o); }
 static void on_threads(const Option& o) { o.threads()->set(size_t(o)); }
 static void on_tb_path(const Option& o) { o.threads()->tb()->init(o.threads(), o); }
-static void on_eval_file(const Option& o) { Eval::NNUE::init(*o.threads()->options()); }
+static void on_eval_file(const Option& o) { Eval::NNUE::init(o.threads()); }
 
 /// Our case insensitive less() function as required by UCI protocol
 bool CaseInsensitiveLess::operator() (const string& s1, const string& s2) const {

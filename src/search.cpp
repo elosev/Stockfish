@@ -174,15 +174,15 @@ void Search::clear(ThreadPool* threads) {
 
 void MainThread::search() {
 
+  ThreadPool *threads = this->threads();
 
-  if (threads()->limits()->perft)
+  if (threads->limits()->perft)
   {
-      nodes = perft<true>(rootPos, threads()->limits()->perft);
+      nodes = perft<true>(rootPos, threads->limits()->perft);
       sync_cout << "\nNodes searched: " << nodes << "\n" << sync_endl;
       return;
   }
 
-  ThreadPool *threads = this->threads();
   TimeManagement *time = threads->time();
   UCI::OptionsMap *options = threads->options();
 
@@ -190,7 +190,7 @@ void MainThread::search() {
   time->init(options, *threads->limits(), us, rootPos.game_ply());
   threads->tt()->new_search();
 
-  Eval::NNUE::verify(*options);
+  Eval::NNUE::verify(threads);
 
   if (rootMoves.empty())
   {
