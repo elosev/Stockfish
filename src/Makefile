@@ -464,7 +464,7 @@ endif
 
 ifeq ($(KERNEL),Darwin)
 	ifneq ($(COMP), ndk) 
-	  ifneq ($(arch),apple-silicon)
+	  ifneq ($(ARCH),apple-silicon)
 	    CXXFLAGS += -mmacosx-version-min=10.14
 	    LDFLAGS += -mmacosx-version-min=10.14
     endif
