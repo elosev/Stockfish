@@ -24,13 +24,16 @@
 #include "types.h"
 
 
-namespace Stockfish::PSQT
+namespace Stockfish
 {
 
-extern Score psq[PIECE_NB][SQUARE_NB];
+  struct PSQT {
 
-// Fill psqt array from a set of internally linked parameters
-void init();
+    Score psq[PIECE_NB][SQUARE_NB];
+
+    // Fill psqt array from a set of internally linked parameters
+    void init();
+  };
 
 } // namespace Stockfish::PSQT
 

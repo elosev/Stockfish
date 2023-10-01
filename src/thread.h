@@ -47,6 +47,9 @@ namespace Stockfish {
 
   struct PositionTables;
 
+  struct PSQT;
+
+
 
 /// Thread class keeps together all the thread-related stuff. We use
 /// per-thread pawn and material hash tables so that once we get a
@@ -118,8 +121,9 @@ struct MainThread : public Thread {
 struct ThreadPool {
 
   ThreadPool(TimeManagement *time, UCI::OptionsMap *options, TranspositionTable *tt, Search::LimitsType *limits, 
-      Tablebases::Tablebases *tb, PositionTables *ptb, Search::Search *search) 
-    : _time(time), _options(options), _tt(tt), _limits(limits), _tb(tb), _ptb(ptb), _search(search) {}
+      Tablebases::Tablebases *tb, PositionTables *ptb, Search::Search *search, PSQT *psqt) 
+    : _time(time), _options(options), _tt(tt), _limits(limits), _tb(tb), _ptb(ptb), _search(search), 
+    _psqt(psqt) {}
   void start_thinking(Position&, StateListPtr&, const Search::LimitsType&, bool = false);
   void clear();
   void set(size_t);
@@ -147,6 +151,7 @@ struct ThreadPool {
   Tablebases::Tablebases* tb() { return _tb; }
   PositionTables* ptb() { return _ptb; }
   Search::Search* search() { return _search; }
+  PSQT* psqt() { return _psqt; }
 
 private:
   StateListPtr setupStates;
@@ -158,6 +163,7 @@ private:
   Tablebases::Tablebases *_tb;
   PositionTables *_ptb;
   Search::Search *_search;
+  PSQT *_psqt;
 
   uint64_t accumulate(std::atomic<uint64_t> Thread::* member) const {
 

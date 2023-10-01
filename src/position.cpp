@@ -203,7 +203,7 @@ Position& Position::set(const string& fenStr, bool isChess960, StateInfo* si, Th
           sq += 2 * SOUTH;
 
       else if ((idx = PieceToChar.find(token)) != string::npos) {
-          put_piece(Piece(idx), sq);
+          put_piece(_threads->psqt(), Piece(idx), sq);
           ++sq;
       }
   }
@@ -740,7 +740,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
       dp.to[1] = SQ_NONE;
 
       // Update board and piece lists
-      remove_piece(capsq);
+      remove_piece(_threads->psqt(), capsq);
 
       // Update material hash key and prefetch access to materialTable
       k ^= _threads->ptb()->zobrist.psq[captured][capsq];
@@ -775,7 +775,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
       dp.from[0] = from;
       dp.to[0] = to;
 
-      move_piece(from, to);
+      move_piece(_threads->psqt(), from, to);
   }
 
   // If the moving piece is a pawn do some special extra work
@@ -796,8 +796,8 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
           assert(relative_rank(us, to) == RANK_8);
           assert(type_of(promotion) >= KNIGHT && type_of(promotion) <= QUEEN);
 
-          remove_piece(to);
-          put_piece(promotion, to);
+          remove_piece(_threads->psqt(), to);
+          put_piece(_threads->psqt(), promotion, to);
 
           // Promoting pawn to SQ_NONE, promoted piece from SQ_NONE
           dp.to[0] = SQ_NONE;
@@ -879,9 +879,9 @@ void Position::undo_move(Move m) {
       assert(type_of(pc) == promotion_type(m));
       assert(type_of(pc) >= KNIGHT && type_of(pc) <= QUEEN);
 
-      remove_piece(to);
+      remove_piece(_threads->psqt(), to);
       pc = make_piece(us, PAWN);
-      put_piece(pc, to);
+      put_piece(_threads->psqt(), pc, to);
   }
 
   if (type_of(m) == CASTLING)
@@ -891,7 +891,7 @@ void Position::undo_move(Move m) {
   }
   else
   {
-      move_piece(to, from); // Put the piece back at the source square
+      move_piece(_threads->psqt(), to, from); // Put the piece back at the source square
 
       if (st->capturedPiece)
       {
@@ -908,7 +908,7 @@ void Position::undo_move(Move m) {
               assert(st->capturedPiece == make_piece(~us, PAWN));
           }
 
-          put_piece(st->capturedPiece, capsq); // Restore the captured piece
+          put_piece(_threads->psqt(), st->capturedPiece, capsq); // Restore the captured piece
       }
   }
 
@@ -943,11 +943,11 @@ void Position::do_castling(Color us, Square from, Square& to, Square& rfrom, Squ
   }
 
   // Remove both pieces first since squares could overlap in Chess960
-  remove_piece(Do ? from : to);
-  remove_piece(Do ? rfrom : rto);
+  remove_piece(_threads->psqt(), Do ? from : to);
+  remove_piece(_threads->psqt(), Do ? rfrom : rto);
   board[Do ? from : to] = board[Do ? rfrom : rto] = NO_PIECE; // Since remove_piece doesn't do this for us
-  put_piece(make_piece(us, KING), Do ? to : from);
-  put_piece(make_piece(us, ROOK), Do ? rto : rfrom);
+  put_piece(_threads->psqt(), make_piece(us, KING), Do ? to : from);
+  put_piece(_threads->psqt(), make_piece(us, ROOK), Do ? rto : rfrom);
 }
 
 

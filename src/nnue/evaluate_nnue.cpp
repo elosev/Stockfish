@@ -29,6 +29,7 @@
 #include "../position.h"
 #include "../uci.h"
 #include "../types.h"
+#include "../thread.h"
 
 #include "evaluate_nnue.h"
 
@@ -305,7 +306,7 @@ namespace Stockfish::Eval::NNUE {
         {
           auto st = pos.state();
 
-          pos.remove_piece(sq);
+          pos.remove_piece(pos.threads()->psqt(), sq);
           st->accumulator.computed[WHITE] = false;
           st->accumulator.computed[BLACK] = false;
 
@@ -313,7 +314,7 @@ namespace Stockfish::Eval::NNUE {
           eval = pos.side_to_move() == WHITE ? eval : -eval;
           v = base - eval;
 
-          pos.put_piece(pc, sq);
+          pos.put_piece(pos.threads()->psqt(), pc, sq);
           st->accumulator.computed[WHITE] = false;
           st->accumulator.computed[BLACK] = false;
         }

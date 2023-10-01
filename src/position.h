@@ -167,8 +167,8 @@ public:
   // Used by NNUE
   StateInfo* state() const;
 
-  void put_piece(Piece pc, Square s);
-  void remove_piece(Square s);
+  void put_piece(PSQT *psqt, Piece pc, Square s);
+  void remove_piece(PSQT *psqt, Square s);
 
   ThreadPool* threads() const { return _threads; }
 
@@ -179,7 +179,7 @@ private:
   void set_check_info() const;
 
   // Other helpers
-  void move_piece(Square from, Square to);
+  void move_piece(PSQT *psqt, Square from, Square to);
   template<bool Do>
   void do_castling(Color us, Square from, Square& to, Square& rfrom, Square& rto);
   template<bool AfterMove>
@@ -373,17 +373,17 @@ inline Thread* Position::this_thread() const {
   return thisThread;
 }
 
-inline void Position::put_piece(Piece pc, Square s) {
+inline void Position::put_piece(PSQT *psqt, Piece pc, Square s) {
 
   board[s] = pc;
   byTypeBB[ALL_PIECES] |= byTypeBB[type_of(pc)] |= s;
   byColorBB[color_of(pc)] |= s;
   pieceCount[pc]++;
   pieceCount[make_piece(color_of(pc), ALL_PIECES)]++;
-  psq += PSQT::psq[pc][s];
+  psq += psqt->psq[pc][s];
 }
 
-inline void Position::remove_piece(Square s) {
+inline void Position::remove_piece(PSQT *psqt, Square s) {
 
   Piece pc = board[s];
   byTypeBB[ALL_PIECES] ^= s;
@@ -392,10 +392,10 @@ inline void Position::remove_piece(Square s) {
   board[s] = NO_PIECE;
   pieceCount[pc]--;
   pieceCount[make_piece(color_of(pc), ALL_PIECES)]--;
-  psq -= PSQT::psq[pc][s];
+  psq -= psqt->psq[pc][s];
 }
 
-inline void Position::move_piece(Square from, Square to) {
+inline void Position::move_piece(PSQT *psqt, Square from, Square to) {
 
   Piece pc = board[from];
   Bitboard fromTo = from | to;
@@ -404,7 +404,7 @@ inline void Position::move_piece(Square from, Square to) {
   byColorBB[color_of(pc)] ^= fromTo;
   board[from] = NO_PIECE;
   board[to] = pc;
-  psq += PSQT::psq[pc][to] - PSQT::psq[pc][from];
+  psq += psqt->psq[pc][to] - psqt->psq[pc][from];
 }
 
 inline void Position::do_move(Move m, StateInfo& newSt) {
