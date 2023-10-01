@@ -56,7 +56,9 @@ namespace Stockfish {
 
 namespace Eval {
 
-  string currentEvalFileName = "None";
+  NNUE::NNUELoader::NNUELoader(): currentEvalFileName("None"), eval(new NNUE::NNUEEvaluator()) {}
+  NNUE::NNUELoader::~NNUELoader() {}
+
 
   /// NNUE::init() tries to load a NNUE network at startup time, or when the engine
   /// receives a UCI command "setoption name EvalFile value nn-[a-z0-9]{12}.nnue"
@@ -66,7 +68,7 @@ namespace Eval {
   /// in the engine directory. Distro packagers may define the DEFAULT_NNUE_DIRECTORY
   /// variable to have the engine search in a special directory in their distro.
 
-  void NNUE::init(ThreadPool *threads) {
+  void NNUE::NNUELoader::init(ThreadPool *threads) {
 
     string eval_file = string((*threads->options())["EvalFile"]);
     if (eval_file.empty())
@@ -84,7 +86,7 @@ namespace Eval {
             if (directory != "<internal>")
             {
                 ifstream stream(directory + eval_file, ios::binary);
-                if (NNUE::load_eval(eval_file, stream))
+                if (eval->load_eval(eval_file, stream))
                     currentEvalFileName = eval_file;
             }
 
@@ -100,14 +102,14 @@ namespace Eval {
                 (void) gEmbeddedNNUEEnd; // Silence warning on unused variable
 
                 istream stream(&buffer);
-                if (NNUE::load_eval(eval_file, stream))
+                if (eval->load_eval(eval_file, stream))
                     currentEvalFileName = eval_file;
             }
         }
   }
 
   /// NNUE::verify() verifies that the last net used was loaded successfully
-  void NNUE::verify(ThreadPool *threads) {
+  void NNUE::NNUELoader::verify(ThreadPool *threads) {
 
     string eval_file = string((*threads->options())["EvalFile"]);
     if (eval_file.empty())
@@ -138,7 +140,7 @@ namespace Eval {
 /// evaluate() is the evaluator for the outer world. It returns a static
 /// evaluation of the position from the point of view of the side to move.
 
-Value Eval::evaluate(const Position& pos) {
+Value Eval::NNUE::NNUELoader::evaluate(const Position& pos) {
 
   assert(!pos.checkers());
 
@@ -151,7 +153,7 @@ Value Eval::evaluate(const Position& pos) {
   Color stm = pos.side_to_move();
   Value optimism = pos.this_thread()->optimism[stm];
 
-  Value nnue = NNUE::evaluate(pos, true, &nnueComplexity);
+  Value nnue = eval->evaluate(pos, true, &nnueComplexity);
 
   // Blend optimism with nnue complexity and (semi)classical complexity
   optimism += optimism * (nnueComplexity + abs(psq - nnue)) / 512;
@@ -173,7 +175,7 @@ Value Eval::evaluate(const Position& pos) {
 /// descriptions and values of each evaluation term. Useful for debugging.
 /// Trace scores are from white's point of view
 
-std::string Eval::trace(Position& pos) {
+std::string Eval::NNUE::NNUELoader::trace(Position& pos) {
 
   if (pos.checkers())
       return "Final evaluation: none (in check)";
@@ -185,12 +187,12 @@ std::string Eval::trace(Position& pos) {
 
   std::stringstream ss;
   ss << std::showpoint << std::noshowpos << std::fixed << std::setprecision(2);
-  ss << '\n' << NNUE::trace(pos) << '\n';
+  ss << '\n' << eval->trace(pos) << '\n';
 
   ss << std::showpoint << std::showpos << std::fixed << std::setprecision(2) << std::setw(15);
 
   Value v;
-  v = NNUE::evaluate(pos, false);
+  v = eval->evaluate(pos, false);
   v = pos.side_to_move() == WHITE ? v : -v;
   ss << "NNUE evaluation        " << 0.01 * UCI::to_cp(v) << " (white side)\n";
 

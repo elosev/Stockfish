@@ -30,20 +30,12 @@
 #include "../uci.h"
 #include "../types.h"
 #include "../thread.h"
+#include "../evaluate.h"
 
 #include "evaluate_nnue.h"
 
 namespace Stockfish::Eval::NNUE {
 
-  // Input feature converter
-  LargePagePtr<FeatureTransformer> featureTransformer;
-
-  // Evaluation function
-  AlignedPtr<Network> network[LayerStacks];
-
-  // Evaluation function file name
-  std::string fileName;
-  std::string netDescription;
 
   namespace Detail {
 
@@ -85,7 +77,7 @@ namespace Stockfish::Eval::NNUE {
 
 
   // Initialize the evaluation function parameters
-  static void initialize() {
+  void NNUEEvaluator::initialize() {
 
     Detail::initialize(featureTransformer);
     for (std::size_t i = 0; i < LayerStacks; ++i)
@@ -93,7 +85,7 @@ namespace Stockfish::Eval::NNUE {
   }
 
   // Read network header
-  static bool read_header(std::istream& stream, std::uint32_t* hashValue, std::string* desc)
+  bool NNUEEvaluator::read_header(std::istream& stream, std::uint32_t* hashValue, std::string* desc)
   {
     std::uint32_t version, size;
 
@@ -107,7 +99,7 @@ namespace Stockfish::Eval::NNUE {
   }
 
   // Write network header
-  static bool write_header(std::ostream& stream, std::uint32_t hashValue, const std::string& desc)
+  bool NNUEEvaluator::write_header(std::ostream& stream, std::uint32_t hashValue, const std::string& desc)
   {
     write_little_endian<std::uint32_t>(stream, Version);
     write_little_endian<std::uint32_t>(stream, hashValue);
@@ -117,7 +109,7 @@ namespace Stockfish::Eval::NNUE {
   }
 
   // Read network parameters
-  static bool read_parameters(std::istream& stream) {
+  bool NNUEEvaluator::read_parameters(std::istream& stream) {
 
     std::uint32_t hashValue;
     if (!read_header(stream, &hashValue, &netDescription)) return false;
@@ -129,7 +121,7 @@ namespace Stockfish::Eval::NNUE {
   }
 
   // Write network parameters
-  static bool write_parameters(std::ostream& stream) {
+  bool NNUEEvaluator::write_parameters(std::ostream& stream) {
 
     if (!write_header(stream, HashValue, netDescription)) return false;
     if (!Detail::write_parameters(stream, *featureTransformer)) return false;
@@ -138,12 +130,12 @@ namespace Stockfish::Eval::NNUE {
     return (bool)stream;
   }
 
-  void hint_common_parent_position(const Position& pos) {
+  void NNUEEvaluator::hint_common_parent_position(const Position& pos) {
     featureTransformer->hint_common_access(pos);
   }
 
   // Evaluation function. Perform differential calculation.
-  Value evaluate(const Position& pos, bool adjusted, int* complexity) {
+  Value NNUEEvaluator::evaluate(const Position& pos, bool adjusted, int* complexity) {
 
     // We manually align the arrays on the stack because with gcc < 9.3
     // overaligning stack variables with alignas() doesn't work correctly.
@@ -177,15 +169,7 @@ namespace Stockfish::Eval::NNUE {
         return static_cast<Value>((psqt + positional) / OutputScale);
   }
 
-  struct NnueEvalTrace {
-    static_assert(LayerStacks == PSQTBuckets);
-
-    Value psqt[LayerStacks];
-    Value positional[LayerStacks];
-    std::size_t correctBucket;
-  };
-
-  static NnueEvalTrace trace_evaluate(const Position& pos) {
+  NnueEvalTrace NNUEEvaluator::trace_evaluate(const Position& pos) {
 
     // We manually align the arrays on the stack because with gcc < 9.3
     // overaligning stack variables with alignas() doesn't work correctly.
@@ -265,7 +249,7 @@ namespace Stockfish::Eval::NNUE {
 
   // trace() returns a string with the value of each piece on a board,
   // and a table for (PSQT, Layers) values bucket by bucket.
-  std::string trace(Position& pos) {
+  std::string NNUEEvaluator::trace(Position& pos) {
 
     std::stringstream ss;
 
@@ -355,7 +339,7 @@ namespace Stockfish::Eval::NNUE {
 
 
   // Load eval, from a file stream or a memory stream
-  bool load_eval(std::string name, std::istream& stream) {
+  bool NNUEEvaluator::load_eval(std::string name, std::istream& stream) {
 
     initialize();
     fileName = name;
@@ -363,7 +347,7 @@ namespace Stockfish::Eval::NNUE {
   }
 
   // Save eval, to a file stream or a memory stream
-  bool save_eval(std::ostream& stream) {
+  bool NNUEEvaluator::save_eval(std::ostream& stream) {
 
     if (fileName.empty())
       return false;
@@ -372,7 +356,7 @@ namespace Stockfish::Eval::NNUE {
   }
 
   /// Save eval, to a file given by its name
-  bool save_eval(const std::optional<std::string>& filename) {
+  bool NNUEEvaluator::save_eval(ThreadPool *threads, const std::optional<std::string>& filename) {
 
     std::string actualFilename;
     std::string msg;
@@ -381,7 +365,7 @@ namespace Stockfish::Eval::NNUE {
         actualFilename = filename.value();
     else
     {
-        if (currentEvalFileName != EvalFileDefaultName)
+        if (threads->nnue()->currentEvalFileName != EvalFileDefaultName)
         {
              msg = "Failed to export a net. A non-embedded net can only be saved if the filename is specified";
 

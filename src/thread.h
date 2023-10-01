@@ -51,6 +51,10 @@ namespace Stockfish {
 
   struct CommandLine;
 
+  namespace Eval::NNUE {
+    struct NNUELoader;
+  }
+
 
 
 /// Thread class keeps together all the thread-related stuff. We use
@@ -123,9 +127,10 @@ struct MainThread : public Thread {
 struct ThreadPool {
 
   ThreadPool(TimeManagement *time, UCI::OptionsMap *options, TranspositionTable *tt, Search::LimitsType *limits, 
-      Tablebases::Tablebases *tb, PositionTables *ptb, Search::Search *search, PSQT *psqt, CommandLine *cli) 
+      Tablebases::Tablebases *tb, PositionTables *ptb, Search::Search *search, PSQT *psqt, CommandLine *cli,
+      Eval::NNUE::NNUELoader *nnue) 
     : _time(time), _options(options), _tt(tt), _limits(limits), _tb(tb), _ptb(ptb), _search(search), 
-    _psqt(psqt), _cli(cli) {}
+    _psqt(psqt), _cli(cli), _nnue(nnue) {}
   void start_thinking(Position&, StateListPtr&, const Search::LimitsType&, bool = false);
   void clear();
   void set(size_t);
@@ -155,6 +160,7 @@ struct ThreadPool {
   Search::Search* search() { return _search; }
   PSQT* psqt() { return _psqt; }
   CommandLine *cli() { return _cli; }
+  Eval::NNUE::NNUELoader *nnue() { return _nnue; }
 
 private:
   StateListPtr setupStates;
@@ -168,6 +174,7 @@ private:
   Search::Search *_search;
   PSQT *_psqt;
   CommandLine *_cli;
+  Eval::NNUE::NNUELoader *_nnue;
 
   uint64_t accumulate(std::atomic<uint64_t> Thread::* member) const {
 

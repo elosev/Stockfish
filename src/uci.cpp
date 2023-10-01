@@ -87,9 +87,9 @@ namespace {
     Position p(threads);
     p.set(pos.fen(), (*threads->options())["UCI_Chess960"], &states->back(), threads->main());
 
-    Eval::NNUE::verify(threads);
+    threads->nnue()->verify(threads);
 
-    sync_cout << "\n" << Eval::trace(p) << sync_endl;
+    sync_cout << "\n" << threads->nnue()->trace(p) << sync_endl;
   }
 
 
@@ -292,7 +292,7 @@ void UCI::loop(int argc, char* argv[], ThreadPool *threads) {
           std::string f;
           if (is >> skipws >> f)
               filename = f;
-          Eval::NNUE::save_eval(filename);
+          threads->nnue()->eval->save_eval(threads, filename);
       }
       else if (token == "--help" || token == "help" || token == "--license" || token == "license")
           sync_cout << "\nStockfish is a powerful chess engine for playing and analyzing."

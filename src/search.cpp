@@ -43,7 +43,6 @@ namespace Stockfish {
 namespace TB = Tablebases;
 
 using std::string;
-using Eval::evaluate;
 using namespace Search;
 
 namespace {
@@ -190,7 +189,7 @@ void MainThread::search() {
   time->init(options, *threads->limits(), us, rootPos.game_ply());
   threads->tt()->new_search();
 
-  Eval::NNUE::verify(threads);
+  threads->nnue()->verify(threads);
 
   if (rootMoves.empty())
   {
@@ -551,6 +550,7 @@ namespace {
     Thread* thisThread = pos.this_thread();
     ThreadPool* threads = thisThread->threads();
     TimeManagement* time = threads->time();
+    auto nnue = threads->nnue();
     SearchTablebases *stb = &threads->search()->stb;
     ss->inCheck        = pos.checkers();
     priorCapture       = pos.captured_piece();
@@ -573,7 +573,7 @@ namespace {
         if (   threads->stop.load(std::memory_order_relaxed)
             || pos.is_draw(ss->ply)
             || ss->ply >= MAX_PLY)
-            return (ss->ply >= MAX_PLY && !ss->inCheck) ? evaluate(pos)
+            return (ss->ply >= MAX_PLY && !ss->inCheck) ? threads->nnue()->evaluate(pos)
                                                         : value_draw(pos.this_thread());
 
         // Step 3. Mate distance pruning. Even if we mate at the next move our score
@@ -713,7 +713,7 @@ namespace {
     else if (excludedMove)
     {
         // Providing the hint that this node's accumulator will be used often brings significant Elo gain (13 Elo)
-        Eval::NNUE::hint_common_parent_position(pos);
+        nnue->eval->hint_common_parent_position(pos);
         eval = ss->staticEval;
     }
     else if (ss->ttHit)
@@ -721,9 +721,9 @@ namespace {
         // Never assume anything about values stored in TT
         ss->staticEval = eval = tte->eval();
         if (eval == VALUE_NONE)
-            ss->staticEval = eval = evaluate(pos);
+            ss->staticEval = eval = threads->nnue()->evaluate(pos);
         else if (PvNode)
-            Eval::NNUE::hint_common_parent_position(pos);
+            nnue->eval->hint_common_parent_position(pos);
 
         // ttValue can be used as a better position evaluation (~7 Elo)
         if (    ttValue != VALUE_NONE
@@ -732,7 +732,7 @@ namespace {
     }
     else
     {
-        ss->staticEval = eval = evaluate(pos);
+        ss->staticEval = eval = threads->nnue()->evaluate(pos);
         // Save static evaluation into the transposition table
         tte->save(threads->tt(), posKey, VALUE_NONE, ss->ttPv, BOUND_NONE, DEPTH_NONE, MOVE_NONE, eval);
     }
@@ -886,7 +886,7 @@ namespace {
                 }
             }
 
-        Eval::NNUE::hint_common_parent_position(pos);
+        nnue->eval->hint_common_parent_position(pos);
     }
 
 moves_loop: // When in check, search starts here
@@ -1429,6 +1429,7 @@ moves_loop: // When in check, search starts here
     }
 
     Thread* thisThread = pos.this_thread();
+    auto nnue = thisThread->threads()->nnue();
     bestMove = MOVE_NONE;
     ss->inCheck = pos.checkers();
     moveCount = 0;
@@ -1436,7 +1437,7 @@ moves_loop: // When in check, search starts here
     // Step 2. Check for an immediate draw or maximum ply reached
     if (   pos.is_draw(ss->ply)
         || ss->ply >= MAX_PLY)
-        return (ss->ply >= MAX_PLY && !ss->inCheck) ? evaluate(pos) : VALUE_DRAW;
+        return (ss->ply >= MAX_PLY && !ss->inCheck) ? nnue->evaluate(pos) : VALUE_DRAW;
 
     assert(0 <= ss->ply && ss->ply < MAX_PLY);
 
@@ -1469,7 +1470,7 @@ moves_loop: // When in check, search starts here
         {
             // Never assume anything about values stored in TT
             if ((ss->staticEval = bestValue = tte->eval()) == VALUE_NONE)
-                ss->staticEval = bestValue = evaluate(pos);
+                ss->staticEval = bestValue = nnue->evaluate(pos);
 
             // ttValue can be used as a better position evaluation (~13 Elo)
             if (    ttValue != VALUE_NONE
@@ -1478,7 +1479,7 @@ moves_loop: // When in check, search starts here
         }
         else
             // In case of null move search use previous static eval with a different sign
-            ss->staticEval = bestValue = (ss-1)->currentMove != MOVE_NULL ? evaluate(pos)
+            ss->staticEval = bestValue = (ss-1)->currentMove != MOVE_NULL ? nnue->evaluate(pos)
                                                                           : -(ss-1)->staticEval;
 
         // Stand pat. Return immediately if static value is at least beta

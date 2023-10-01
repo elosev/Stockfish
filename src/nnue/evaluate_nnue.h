@@ -55,13 +55,40 @@ namespace Stockfish::Eval::NNUE {
   template <typename T>
   using LargePagePtr = std::unique_ptr<T, LargePageDeleter<T>>;
 
-  std::string trace(Position& pos);
-  Value evaluate(const Position& pos, bool adjusted = false, int* complexity = nullptr);
-  void hint_common_parent_position(const Position& pos);
+  struct NnueEvalTrace {
+    static_assert(LayerStacks == PSQTBuckets);
 
-  bool load_eval(std::string name, std::istream& stream);
-  bool save_eval(std::ostream& stream);
-  bool save_eval(const std::optional<std::string>& filename);
+    Value psqt[LayerStacks];
+    Value positional[LayerStacks];
+    std::size_t correctBucket;
+  };
+
+  struct NNUEEvaluator {
+    std::string trace(Position& pos);
+    Value evaluate(const Position& pos, bool adjusted = false, int* complexity = nullptr);
+    void hint_common_parent_position(const Position& pos);
+
+    bool load_eval(std::string name, std::istream& stream);
+    bool save_eval(std::ostream& stream);
+    bool save_eval(ThreadPool *threads, const std::optional<std::string>& filename);
+
+    // Input feature converter
+    LargePagePtr<FeatureTransformer> featureTransformer;
+
+    // Evaluation function
+    AlignedPtr<Network> network[LayerStacks];
+
+    // Evaluation function file name
+    std::string fileName;
+    std::string netDescription;
+  private:
+    void initialize();
+    bool read_header(std::istream& stream, std::uint32_t* hashValue, std::string* desc);
+    bool write_header(std::ostream& stream, std::uint32_t hashValue, const std::string& desc);
+    bool read_parameters(std::istream& stream);
+    bool write_parameters(std::ostream& stream);
+    NnueEvalTrace trace_evaluate(const Position& pos);
+  };
 
 }  // namespace Stockfish::Eval::NNUE
 
