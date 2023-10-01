@@ -67,9 +67,9 @@ struct Tablebases {
 
   WDLScore probe_wdl(Position& pos, ProbeState* result);
   int probe_dtz(Position& pos, ProbeState* result);
-  bool root_probe(UCI::OptionsMap* options,Position& pos, Search::RootMoves& rootMoves);
-  bool root_probe_wdl(UCI::OptionsMap* options,Position& pos, Search::RootMoves& rootMoves);
-  void rank_root_moves(UCI::OptionsMap* options, Position& pos, Search::RootMoves& rootMoves);
+  bool root_probe(Position& pos, Search::RootMoves& rootMoves);
+  bool root_probe_wdl(Position& pos, Search::RootMoves& rootMoves);
+  void rank_root_moves( Position& pos, Search::RootMoves& rootMoves);
 
   bool pawns_comp(Square i, Square j) { return MapPawns[i] < MapPawns[j]; }
 

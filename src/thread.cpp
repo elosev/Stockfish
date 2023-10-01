@@ -144,7 +144,7 @@ void ThreadPool::set(size_t requested) {
       _tt->resize(size_t((*_options)["Hash"]), this);
 
       // Init thread number dependent search params.
-      Search::init(this);
+      _search->init(this);
   }
 }
 
@@ -183,7 +183,7 @@ void ThreadPool::start_thinking(Position& pos, StateListPtr& states,
           rootMoves.emplace_back(m);
 
   if (!rootMoves.empty())
-      _tb->rank_root_moves(options(), pos, rootMoves);
+      _tb->rank_root_moves(pos, rootMoves);
 
   // After ownership transfer 'states' becomes empty, so if we stop the search
   // and call 'go' again without setting a new position states.get() == nullptr.

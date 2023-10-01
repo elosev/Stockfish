@@ -39,13 +39,6 @@
 namespace Stockfish {
 
 
-namespace Tablebases {
-
-  int Cardinality;
-  bool RootInTB;
-  bool UseRule50;
-  Depth ProbeDepth;
-}
 
 namespace TB = Tablebases;
 
@@ -63,11 +56,8 @@ namespace {
     return Value((140 - 40 * noTtCutNode) * (d - improving));
   }
 
-  // Reductions lookup table initialized at startup
-  int Reductions[MAX_MOVES]; // [depth or moveNumber]
-
-  Depth reduction(bool i, Depth d, int mn, Value delta, Value rootDelta) {
-    int r = Reductions[d] * Reductions[mn];
+  Depth reduction(Stockfish::Search::Search *search, bool i, Depth d, int mn, Value delta, Value rootDelta) {
+    int r = search->Reductions[d] * search->Reductions[mn];
     return (r + 1372 - int(delta) * 1073 / int(rootDelta)) / 1024 + (!i && r > 936);
   }
 
@@ -153,6 +143,8 @@ namespace {
 } // namespace
 
 
+namespace Search {
+
 /// Search::init() is called at startup to initialize various lookup tables
 
 void Search::init(ThreadPool* threads) {
@@ -173,6 +165,8 @@ void Search::clear(ThreadPool* threads) {
   threads->clear();
   threads->tb()->init(threads, (*threads->options())["SyzygyPath"]); // Free mapped files
 }
+
+}//namespace Search
 
 
 /// MainThread::search() is started when the program receives the UCI 'go'
@@ -557,6 +551,7 @@ namespace {
     Thread* thisThread = pos.this_thread();
     ThreadPool* threads = thisThread->threads();
     TimeManagement* time = threads->time();
+    SearchTablebases *stb = &threads->search()->stb;
     ss->inCheck        = pos.checkers();
     priorCapture       = pos.captured_piece();
     Color us           = pos.side_to_move();
@@ -654,12 +649,12 @@ namespace {
     }
 
     // Step 5. Tablebases probe
-    if (!rootNode && !excludedMove && TB::Cardinality)
+    if (!rootNode && !excludedMove && stb->Cardinality)
     {
         int piecesCount = pos.count<ALL_PIECES>();
 
-        if (    piecesCount <= TB::Cardinality
-            && (piecesCount <  TB::Cardinality || depth >= TB::ProbeDepth)
+        if (    piecesCount <= stb->Cardinality
+            && (piecesCount <  stb->Cardinality || depth >= stb->ProbeDepth)
             &&  pos.rule50_count() == 0
             && !pos.can_castle(ANY_CASTLING))
         {
@@ -674,7 +669,7 @@ namespace {
             {
                 thisThread->tbHits.fetch_add(1, std::memory_order_relaxed);
 
-                int drawScore = TB::UseRule50 ? 1 : 0;
+                int drawScore = stb->UseRule50 ? 1 : 0;
 
                 // use the range VALUE_MATE_IN_MAX_PLY to VALUE_TB_WIN_IN_MAX_PLY to score
                 value =  wdl < -drawScore ? VALUE_MATED_IN_MAX_PLY + ss->ply + 1
@@ -970,7 +965,7 @@ moves_loop: // When in check, search starts here
 
       Value delta = beta - alpha;
 
-      Depth r = reduction(improving, depth, moveCount, delta, thisThread->rootDelta);
+      Depth r = reduction(threads->search(), improving, depth, moveCount, delta, thisThread->rootDelta);
 
       // Step 14. Pruning at shallow depth (~120 Elo). Depth conditions are important for mate finding.
       if (  !rootNode
@@ -1866,7 +1861,7 @@ string UCI::pv(const Position& pos, Depth depth, ThreadPool* threads) {
   size_t pvIdx = pos.this_thread()->pvIdx;
   size_t multiPV = std::min((size_t)(*threads->options())["MultiPV"], rootMoves.size());
   uint64_t nodesSearched = threads->nodes_searched();
-  uint64_t tbHits = threads->tb_hits() + (TB::RootInTB ? rootMoves.size() : 0);
+  uint64_t tbHits = threads->tb_hits() + (pos.threads()->search()->stb.RootInTB ? rootMoves.size() : 0);
 
   for (size_t i = 0; i < multiPV; ++i)
   {
@@ -1881,7 +1876,7 @@ string UCI::pv(const Position& pos, Depth depth, ThreadPool* threads) {
       if (v == -VALUE_INFINITE)
           v = VALUE_ZERO;
 
-      bool tb = TB::RootInTB && abs(v) < VALUE_MATE_IN_MAX_PLY;
+      bool tb = pos.threads()->search()->stb.RootInTB && abs(v) < VALUE_MATE_IN_MAX_PLY;
       v = tb ? rootMoves[i].tbScore : v;
 
       if (ss.rdbuf()->in_avail()) // Not at first line
@@ -1946,36 +1941,36 @@ bool RootMove::extract_ponder_from_tt(Position& pos) {
     return pv.size() > 1;
 }
 
-void Tablebases::Tablebases::rank_root_moves(UCI::OptionsMap *options, Position& pos, Stockfish::Search::RootMoves& rootMoves) {
+void Tablebases::Tablebases::rank_root_moves(Position& pos, Stockfish::Search::RootMoves& rootMoves) {
 
-    RootInTB = false;
-    UseRule50 = bool((*options)["Syzygy50MoveRule"]);
-    ProbeDepth = int((*options)["SyzygyProbeDepth"]);
-    Cardinality = int((*options)["SyzygyProbeLimit"]);
+    pos.threads()->search()->stb.RootInTB = false;
+    pos.threads()->search()->stb.UseRule50 = bool((*pos.threads()->options())["Syzygy50MoveRule"]);
+    pos.threads()->search()->stb.ProbeDepth = int((*pos.threads()->options())["SyzygyProbeDepth"]);
+    pos.threads()->search()->stb.Cardinality = int((*pos.threads()->options())["SyzygyProbeLimit"]);
     bool dtz_available = true;
 
     // Tables with fewer pieces than SyzygyProbeLimit are searched with
     // ProbeDepth == DEPTH_ZERO
-    if (Cardinality > MaxCardinality)
+    if (pos.threads()->search()->stb.Cardinality > MaxCardinality)
     {
-        Cardinality = MaxCardinality;
-        ProbeDepth = 0;
+        pos.threads()->search()->stb.Cardinality = MaxCardinality;
+        pos.threads()->search()->stb.ProbeDepth = 0;
     }
 
-    if (Cardinality >= popcount(pos.pieces()) && !pos.can_castle(ANY_CASTLING))
+    if (pos.threads()->search()->stb.Cardinality >= popcount(pos.pieces()) && !pos.can_castle(ANY_CASTLING))
     {
         // Rank moves using DTZ tables
-        RootInTB = root_probe(options, pos, rootMoves);
+        pos.threads()->search()->stb.RootInTB = root_probe(pos, rootMoves);
 
-        if (!RootInTB)
+        if (!pos.threads()->search()->stb.RootInTB)
         {
             // DTZ tables are missing; try to rank moves using WDL tables
             dtz_available = false;
-            RootInTB = root_probe_wdl(options, pos, rootMoves);
+            pos.threads()->search()->stb.RootInTB = root_probe_wdl(pos, rootMoves);
         }
     }
 
-    if (RootInTB)
+    if (pos.threads()->search()->stb.RootInTB)
     {
         // Sort moves according to TB rank
         std::stable_sort(rootMoves.begin(), rootMoves.end(),
@@ -1983,7 +1978,7 @@ void Tablebases::Tablebases::rank_root_moves(UCI::OptionsMap *options, Position&
 
         // Probe during search only if DTZ is not available and we are winning
         if (dtz_available || rootMoves[0].tbScore <= VALUE_DRAW)
-            Cardinality = 0;
+            pos.threads()->search()->stb.Cardinality = 0;
     }
     else
     {

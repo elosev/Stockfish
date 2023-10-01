@@ -37,7 +37,7 @@ namespace Stockfish {
 namespace UCI {
 
 /// 'On change' actions, triggered by an option's value change
-static void on_clear_hash(const Option& o) { Search::clear(o.threads()); }
+static void on_clear_hash(const Option& o) { o.threads()->search()->clear(o.threads()); }
 static void on_hash_size(const Option& o) { o.threads()->tt()->resize(size_t(o), o.threads()); }
 static void on_logger(const Option& o) { start_logger(o); }
 static void on_threads(const Option& o) { o.threads()->set(size_t(o)); }

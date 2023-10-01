@@ -105,9 +105,21 @@ struct LimitsType {
   int64_t nodes;
 };
 
+struct SearchTablebases {
+  int Cardinality;
+  bool RootInTB;
+  bool UseRule50;
+  Depth ProbeDepth;
+};
 
-void init(ThreadPool *threads);
-void clear(ThreadPool *threads);
+struct Search {
+  void init(ThreadPool *threads);
+  void clear(ThreadPool *threads);
+
+  SearchTablebases stb;
+  // Reductions lookup table initialized at startup
+  int Reductions[MAX_MOVES]; // [depth or moveNumber]
+};
 
 } // namespace Search
 
