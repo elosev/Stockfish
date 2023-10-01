@@ -56,8 +56,8 @@ extern "C" int stockfish_thread_wrapper(int pipe_in, int pipe_out, int argc, cha
   UCI::OptionsMap Options; // Global object
   TimeManagement Time;// Our global time management object
   Tablebases::Tablebases tb;
-  ThreadPool Threads(&Time, &Options, &TT, &Limits, &tb, &ptb, &search, &psqt, &cli, &nnue); // Global object
-  Tune tune(&Threads);
+  ThreadPool threads(&Time, &Options, &TT, &Limits, &tb, &ptb, &search, &psqt, &cli, &nnue); // Global object
+  Tune tune(&threads);
 
   //end
   static std::mutex mtx;
@@ -89,7 +89,7 @@ extern "C" int stockfish_thread_wrapper(int pipe_in, int pipe_out, int argc, cha
 
   cli.init(argc, argv);
   if (!options_initialized) {
-    UCI::init(Options, &Threads);
+    UCI::init(Options, &threads);
     options_initialized = true;
   }
 
@@ -100,15 +100,15 @@ extern "C" int stockfish_thread_wrapper(int pipe_in, int pipe_out, int argc, cha
   tune.init();
   psqt.init();
   ptb.init();
-  Threads.set(size_t(Options["Threads"]));
-  search.clear(&Threads); // After threads are up
-  nnue.init(&Threads);
+  threads.set(size_t(Options["Threads"]));
+  search.clear(&threads); // After threads are up
+  nnue.init(&threads);
 
   printf("##4\n");
-  UCI::loop(argc, argv, &Threads);
+  UCI::loop(argc, argv, &threads);
   printf("##5\n");
 
-  Threads.set(0);
+  threads.set(0);
   printf("##6\n");
 
 
@@ -230,14 +230,14 @@ int main(int argc, char* argv[]) {
   UCI::OptionsMap Options; // Global object
   TimeManagement Time;// Our global time management object
   Tablebases::Tablebases tb;
-  ThreadPool Threads(&Time, &Options, &TT, &Limits, &tb, &ptb, &search, &psqt, &cli, &nnue); // Global object
-  Tune tune(&Threads);
+  ThreadPool threads(&Time, &Options, &TT, &Limits, &tb, &ptb, &search, &psqt, &cli, &nnue); // Global object
+  Tune tune(&threads);
 
 
   std::cout << engine_info() << std::endl;
 
   cli.init(argc, argv);
-  UCI::init(Options, &Threads);
+  UCI::init(Options, &threads);
   //elosev: calling this after options are initialized (see tune.h)
   
   //call this once, it initalizes constant structure
@@ -247,12 +247,12 @@ int main(int argc, char* argv[]) {
   tune.init();
   psqt.init();
   ptb.init();
-  Threads.set(size_t(Options["Threads"]));
-  search.clear(&Threads); // After threads are up
-  nnue.init(&Threads);
+  threads.set(size_t(Options["Threads"]));
+  search.clear(&threads); // After threads are up
+  nnue.init(&threads);
 
-  UCI::loop(argc, argv, &Threads);
+  UCI::loop(argc, argv, &threads);
 
-  Threads.set(0);
+  threads.set(0);
   return 0;
 }

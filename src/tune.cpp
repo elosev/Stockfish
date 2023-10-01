@@ -30,7 +30,9 @@ using std::string;
 namespace Stockfish {
 
 const UCI::Option* LastOption = nullptr;
-static std::map<std::string, int> TuneResults;
+//elosev: This static doesn't seem to be used in the code and is always empty. Turn it into const
+//and replace with an assert (which is BAD).
+static const std::map<std::string, int> TuneResults;
 
 string Tune::next(string& names, bool pop) {
 
@@ -63,8 +65,11 @@ static void make_option(Tune *tune, const string& n, int v, const SetRange& r) {
   if (r(v).first == r(v).second)
       return;
 
-  if (TuneResults.count(n))
-      v = TuneResults[n];
+  //elosev: As TuneResults seems to be not used commenting out this code, replacing with an assert
+  //for future. If this variable ever gets used we need to extract it into local context
+  //if (TuneResults.count(n))
+  //    v = TuneResults[n];
+  assert(!TuneResults.count(n));
 
   UCI::OptionsMap *options = tune->threads()->options();
   (*options)[n] << UCI::Option(tune->threads(), tune, v, r(v).first, r(v).second, on_tune);
