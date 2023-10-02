@@ -108,9 +108,13 @@ struct MainThread : public Thread {
 
   using Thread::Thread;
 
+  explicit MainThread(ThreadPool* threads, size_t s): Thread(threads, s), lastInfoTime(now()) {}
+
   void search() override;
   void check_time();
 
+  TimePoint lastInfoTime;
+  //variables below are initialized in thread.cpp  (or we hope so)
   double previousTimeReduction;
   Value bestPreviousScore;
   Value bestPreviousAverageScore;
@@ -149,8 +153,8 @@ struct ThreadPool {
   ThreadPool(TimeManagement *time, UCI::OptionsMap *options, TranspositionTable *tt, Search::LimitsType *limits, 
       Tablebases::Tablebases *tb, PositionTables *ptb, Search::Search *search, PSQT *psqt, CommandLine *cli,
       Eval::NNUE::NNUELoader *nnue, ThreadIoStreams *io) 
-    : _time(time), _options(options), _tt(tt), _limits(limits), _tb(tb), _ptb(ptb), _search(search), 
-    _psqt(psqt), _cli(cli), _nnue(nnue), _io(io) {}
+    : _skills_rng(now()),_time(time), _options(options), _tt(tt), _limits(limits), _tb(tb), _ptb(ptb),
+    _search(search), _psqt(psqt), _cli(cli), _nnue(nnue), _io(io) {}
   void start_thinking(Position&, StateListPtr&, const Search::LimitsType&, bool = false);
   void clear();
   void set(size_t);
@@ -171,6 +175,8 @@ struct ThreadPool {
   auto size() const noexcept { return threads.size(); }
   auto empty() const noexcept { return threads.empty(); }
 
+  PRNG* skills_rng() { return &_skills_rng; }
+
   TimeManagement* time() { return _time; }
   UCI::OptionsMap* options() { return _options; }
   TranspositionTable* tt() { return _tt; }
@@ -186,6 +192,7 @@ struct ThreadPool {
 private:
   StateListPtr setupStates;
   std::vector<Thread*> threads;
+  PRNG _skills_rng;
   TimeManagement *_time;
   UCI::OptionsMap *_options;
   TranspositionTable *_tt;

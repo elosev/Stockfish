@@ -1789,7 +1789,6 @@ moves_loop: // When in check, search starts here
   Move Skill::pick_best(size_t multiPV, ThreadPool *threads) {
 
     const RootMoves& rootMoves = threads->main()->rootMoves;
-    static PRNG rng(now()); // PRNG sequence should be non-deterministic
 
     // RootMoves are already sorted by score in descending order
     Value topScore = rootMoves[0].score;
@@ -1804,7 +1803,7 @@ moves_loop: // When in check, search starts here
     {
         // This is our magic formula
         int push = int((  weakness * int(topScore - rootMoves[i].score)
-                        + delta * (rng.rand<unsigned>() % int(weakness))) / 128);
+                        + delta * (threads->skills_rng()->rand<unsigned>() % int(weakness))) / 128);
 
         if (rootMoves[i].score + push >= maxScore)
         {
@@ -1831,8 +1830,6 @@ void MainThread::check_time() {
 
   // When using nodes, ensure checking rate is not lower than 0.1% of nodes
   callsCnt = threads()->limits()->nodes ? std::min(512, int(threads()->limits()->nodes / 1024)) : 512;
-
-  static TimePoint lastInfoTime = now();
 
   TimePoint elapsed = time->elapsed(threads());
   TimePoint tick = threads()->limits()->startTime + elapsed;
