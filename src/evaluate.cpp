@@ -124,16 +124,16 @@ namespace Eval {
         string msg4 = "The default net can be downloaded from: https://tests.stockfishchess.org/api/nn/" + std::string(EvalFileDefaultName);
         string msg5 = "The engine will be terminated now.";
 
-        sync_cout << "info string ERROR: " << msg1 << sync_endl;
-        sync_cout << "info string ERROR: " << msg2 << sync_endl;
-        sync_cout << "info string ERROR: " << msg3 << sync_endl;
-        sync_cout << "info string ERROR: " << msg4 << sync_endl;
-        sync_cout << "info string ERROR: " << msg5 << sync_endl;
+        sync_thread_out(threads) << "info string ERROR: " << msg1 << sync_thread_endl(threads);
+        sync_thread_out(threads) << "info string ERROR: " << msg2 << sync_thread_endl(threads);
+        sync_thread_out(threads) << "info string ERROR: " << msg3 << sync_thread_endl(threads);
+        sync_thread_out(threads) << "info string ERROR: " << msg4 << sync_thread_endl(threads);
+        sync_thread_out(threads) << "info string ERROR: " << msg5 << sync_thread_endl(threads);
 
         exit(EXIT_FAILURE);
     }
 
-    sync_cout << "info string NNUE evaluation using " << eval_file << sync_endl;
+    sync_thread_out(threads) << "info string NNUE evaluation using " << eval_file << sync_thread_endl(threads);
   }
 }
 

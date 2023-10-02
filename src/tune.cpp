@@ -76,7 +76,7 @@ static void make_option(Tune *tune, const string& n, int v, const SetRange& r) {
   LastOption = &(*options)[n];
 
   // Print formatted parameters, ready to be copy-pasted in Fishtest
-  std::cout << n << ","
+  *tune->threads()->io()->out() << n << ","
             << v << ","
             << r(v).first << "," << r(v).second << ","
             << (r(v).second - r(v).first) / 20.0 << ","

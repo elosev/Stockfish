@@ -89,7 +89,7 @@ namespace {
 
     threads->nnue()->verify(threads);
 
-    sync_cout << "\n" << threads->nnue()->trace(p) << sync_endl;
+    sync_thread_out(threads) << "\n" << threads->nnue()->trace(p) << sync_thread_endl(threads);
   }
 
 
@@ -113,7 +113,7 @@ namespace {
     if (threads->options()->count(name))
         (*threads->options())[name] = value;
     else
-        sync_cout << "No such option: " << name << sync_endl;
+        sync_thread_out(threads) << "No such option: " << name << sync_thread_endl(threads);
   }
 
 
@@ -247,7 +247,7 @@ void UCI::loop(int argc, char* argv[], ThreadPool *threads) {
       cmd += std::string(argv[i]) + " ";
 
   do {
-      if (argc == 1 && !getline(cin, cmd)) // Wait for an input or an end-of-file (EOF) indication
+      if (argc == 1 && !getline(*threads->io()->in(), cmd)) // Wait for an input or an end-of-file (EOF) indication
           cmd = "quit";
 
       istringstream is(cmd);
@@ -268,24 +268,24 @@ void UCI::loop(int argc, char* argv[], ThreadPool *threads) {
 
       else if (token == "uci") {
         const OptionsMap& options = *threads->options();
-          sync_cout << "id name " << engine_info(true)
+          sync_thread_out(threads) << "id name " << engine_info(true)
                     << "\n"       << options
-                    << "\nuciok"  << sync_endl;
+                    << "\nuciok"  << sync_thread_endl(threads);
       }
 
       else if (token == "setoption")  setoption(is, threads);
       else if (token == "go")         go(pos, is, states, threads);
       else if (token == "position")   position(pos, is, states, threads);
       else if (token == "ucinewgame") threads->search()->clear(threads);
-      else if (token == "isready")    sync_cout << "readyok" << sync_endl;
+      else if (token == "isready")    sync_thread_out(threads) << "readyok" << sync_thread_endl(threads);
 
       // Add custom non-UCI commands, mainly for debugging purposes.
       // These commands must not be used during a search!
       else if (token == "flip")     pos.flip();
       else if (token == "bench")    bench(pos, is, states, threads);
-      else if (token == "d")        sync_cout << pos << sync_endl;
+      else if (token == "d")        sync_thread_out(threads) << pos << sync_thread_endl(threads);
       else if (token == "eval")     trace_eval(pos, threads);
-      else if (token == "compiler") sync_cout << compiler_info() << sync_endl;
+      else if (token == "compiler") sync_thread_out(threads) << compiler_info() << sync_thread_endl(threads);
       else if (token == "export_net")
       {
           std::optional<std::string> filename;
@@ -295,14 +295,14 @@ void UCI::loop(int argc, char* argv[], ThreadPool *threads) {
           threads->nnue()->eval->save_eval(threads, filename);
       }
       else if (token == "--help" || token == "help" || token == "--license" || token == "license")
-          sync_cout << "\nStockfish is a powerful chess engine for playing and analyzing."
+          sync_thread_out(threads) << "\nStockfish is a powerful chess engine for playing and analyzing."
                        "\nIt is released as free software licensed under the GNU GPLv3 License."
                        "\nStockfish is normally used with a graphical user interface (GUI) and implements"
                        "\nthe Universal Chess Interface (UCI) protocol to communicate with a GUI, an API, etc."
                        "\nFor any further information, visit https://github.com/official-stockfish/Stockfish#readme"
-                       "\nor read the corresponding README.md and Copying.txt files distributed along with this program.\n" << sync_endl;
+                       "\nor read the corresponding README.md and Copying.txt files distributed along with this program.\n" << sync_thread_endl(threads);
       else if (!token.empty() && token[0] != '#')
-          sync_cout << "Unknown command: '" << cmd << "'. Type help for more information." << sync_endl;
+          sync_thread_out(threads) << "Unknown command: '" << cmd << "'. Type help for more information." << sync_thread_endl(threads);
 
   } while (token != "quit" && argc == 1); // The command-line arguments are one-shot
 }

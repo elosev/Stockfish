@@ -24,6 +24,7 @@
 #include <mutex>
 #include <thread>
 #include <vector>
+#include <tuple>
 
 #include "movepick.h"
 #include "position.h"
@@ -119,6 +120,25 @@ struct MainThread : public Thread {
   std::atomic_bool ponder;
 };
 
+enum SyncCout { IO_LOCK, IO_UNLOCK };
+
+class ThreadIoStreams {
+  public:
+    ThreadIoStreams(std::istream *in, std::ostream *out)
+      : _in(in), _out(out) {}
+
+    std::istream* in() { return _in; }
+    std::ostream* out() { return _out; }
+
+    friend std::ostream& operator<<(std::ostream& os, std::tuple<ThreadIoStreams *, SyncCout> t);
+
+  private:
+    std::istream *_in;
+    std::ostream *_out;
+
+    std::mutex m;
+};
+
 
 /// ThreadPool struct handles all the threads-related stuff like init, starting,
 /// parking and, most importantly, launching a thread. All the access to threads
@@ -128,9 +148,9 @@ struct ThreadPool {
 
   ThreadPool(TimeManagement *time, UCI::OptionsMap *options, TranspositionTable *tt, Search::LimitsType *limits, 
       Tablebases::Tablebases *tb, PositionTables *ptb, Search::Search *search, PSQT *psqt, CommandLine *cli,
-      Eval::NNUE::NNUELoader *nnue) 
+      Eval::NNUE::NNUELoader *nnue, ThreadIoStreams *io) 
     : _time(time), _options(options), _tt(tt), _limits(limits), _tb(tb), _ptb(ptb), _search(search), 
-    _psqt(psqt), _cli(cli), _nnue(nnue) {}
+    _psqt(psqt), _cli(cli), _nnue(nnue), _io(io) {}
   void start_thinking(Position&, StateListPtr&, const Search::LimitsType&, bool = false);
   void clear();
   void set(size_t);
@@ -161,6 +181,7 @@ struct ThreadPool {
   PSQT* psqt() { return _psqt; }
   CommandLine *cli() { return _cli; }
   Eval::NNUE::NNUELoader *nnue() { return _nnue; }
+  ThreadIoStreams* io() { return _io; }
 
 private:
   StateListPtr setupStates;
@@ -175,6 +196,7 @@ private:
   PSQT *_psqt;
   CommandLine *_cli;
   Eval::NNUE::NNUELoader *_nnue;
+  ThreadIoStreams* _io;
 
   uint64_t accumulate(std::atomic<uint64_t> Thread::* member) const {
 

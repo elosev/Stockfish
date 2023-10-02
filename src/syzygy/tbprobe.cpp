@@ -1401,7 +1401,8 @@ void Tablebases::init(ThreadPool *threads, const std::string& paths) {
         }
     }
 
-    sync_cout << "info string Found " << _tb_tables->size() << " tablebases" << sync_endl;
+    sync_thread_out(threads) << "info string Found " << _tb_tables->size() 
+      << " tablebases" << sync_thread_endl(threads);
 }
 
 // Probe the WDL table for a particular position.

@@ -56,11 +56,14 @@ inline TimePoint now() {
 }
 
 
-enum SyncCout { IO_LOCK, IO_UNLOCK };
-std::ostream& operator<<(std::ostream&, SyncCout);
+//enum SyncCout { IO_LOCK, IO_UNLOCK };
+//NOTE: commenting out it here for posterity
+//std::ostream& operator<<(std::ostream&, SyncCout);
+//#define sync_cout std::cout << IO_LOCK
+//#define sync_endl std::endl << IO_UNLOCK
 
-#define sync_cout std::cout << IO_LOCK
-#define sync_endl std::endl << IO_UNLOCK
+#define sync_thread_out(threads) *((threads)->io()->out()) << std::make_tuple((threads)->io(), IO_LOCK)
+#define sync_thread_endl(threads) std::endl << std::make_tuple((threads)->io(), IO_UNLOCK)
 
 
 // align_ptr_up() : get the first aligned element of an array.

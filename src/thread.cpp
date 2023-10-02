@@ -265,4 +265,17 @@ void ThreadPool::wait_for_search_finished() const {
             th->wait_for_search_finished();
 }
 
+std::ostream& operator<<(std::ostream& os, std::tuple<ThreadIoStreams *, SyncCout> t) {
+  auto io = std::get<ThreadIoStreams*>(t);
+  SyncCout sc = std::get<SyncCout>(t);
+
+  if (sc == IO_LOCK) {
+    io->m.lock();
+  } else {
+    io->m.unlock();
+  }
+
+  return os;
+}
+
 } // namespace Stockfish

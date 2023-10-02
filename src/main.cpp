@@ -46,6 +46,7 @@ typedef std::basic_filebuf2<char, std::char_traits<char>> filebuf2;
 
 extern "C" int stockfish_thread_wrapper(int pipe_in, int pipe_out, int argc, char* argv[]) {
   //new variables
+  ThreadIoStreams io(&std::cin, &std::cout);
   Eval::NNUE::NNUELoader nnue;
   CommandLine cli;
   PSQT psqt;
@@ -56,7 +57,7 @@ extern "C" int stockfish_thread_wrapper(int pipe_in, int pipe_out, int argc, cha
   UCI::OptionsMap Options; // Global object
   TimeManagement Time;// Our global time management object
   Tablebases::Tablebases tb;
-  ThreadPool threads(&Time, &Options, &TT, &Limits, &tb, &ptb, &search, &psqt, &cli, &nnue); // Global object
+  ThreadPool threads(&Time, &Options, &TT, &Limits, &tb, &ptb, &search, &psqt, &cli, &nnue, &io); // Global object
   Tune tune(&threads);
 
   //end
@@ -220,6 +221,7 @@ int main(int argc, char* argv[]) {
   //It introduces circular reference, and potentially creates risks during destruction where options
   //may have reference to already deleted ThreadPool. It seems to be ok, as Options are not used
   //after we exit from UCI::loop
+  ThreadIoStreams io(&std::cin, &std::cout);
   Eval::NNUE::NNUELoader nnue;
   CommandLine cli;
   PSQT psqt;
@@ -230,11 +232,11 @@ int main(int argc, char* argv[]) {
   UCI::OptionsMap Options; // Global object
   TimeManagement Time;// Our global time management object
   Tablebases::Tablebases tb;
-  ThreadPool threads(&Time, &Options, &TT, &Limits, &tb, &ptb, &search, &psqt, &cli, &nnue); // Global object
+  ThreadPool threads(&Time, &Options, &TT, &Limits, &tb, &ptb, &search, &psqt, &cli, &nnue, &io); // Global object
   Tune tune(&threads);
 
 
-  std::cout << engine_info() << std::endl;
+  *io.out() << engine_info() << std::endl;
 
   cli.init(argc, argv);
   UCI::init(Options, &threads);

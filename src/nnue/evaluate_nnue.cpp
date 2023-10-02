@@ -369,7 +369,7 @@ namespace Stockfish::Eval::NNUE {
         {
              msg = "Failed to export a net. A non-embedded net can only be saved if the filename is specified";
 
-             sync_cout << msg << sync_endl;
+             sync_thread_out(threads) << msg << sync_thread_endl(threads);
              return false;
         }
         actualFilename = EvalFileDefaultName;
@@ -381,7 +381,7 @@ namespace Stockfish::Eval::NNUE {
     msg = saved ? "Network saved successfully to " + actualFilename
                 : "Failed to export a net";
 
-    sync_cout << msg << sync_endl;
+    sync_thread_out(threads) << msg << sync_thread_endl(threads);
     return saved;
   }
 

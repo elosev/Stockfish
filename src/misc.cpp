@@ -395,18 +395,19 @@ void dbg_print() {
 /// Used to serialize access to std::cout to avoid multiple threads writing at
 /// the same time.
 
-std::ostream& operator<<(std::ostream& os, SyncCout sc) {
-
-  static std::mutex m;
-
-  if (sc == IO_LOCK)
-      m.lock();
-
-  if (sc == IO_UNLOCK)
-      m.unlock();
-
-  return os;
-}
+//NOTE: commenting it out here for posterity, shouldn't be used
+//std::ostream& operator<<(std::ostream& os, SyncCout sc) {
+//
+//  static std::mutex m;
+//
+//  if (sc == IO_LOCK)
+//      m.lock();
+//
+//  if (sc == IO_UNLOCK)
+//      m.unlock();
+//
+//  return os;
+//}
 
 
 /// Trampoline helper to avoid moving Logger to misc.h
