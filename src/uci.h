@@ -45,7 +45,12 @@ struct CaseInsensitiveLess {
 };
 
 /// The options container is defined as a std::map
-class OptionsMap: public std::map<std::string, Option, CaseInsensitiveLess> {};
+class OptionsMap: public std::map<std::string, Option, CaseInsensitiveLess> {
+public:
+  OptionsMap(): insert_order(0) {}
+
+  size_t insert_order;
+};
 
 /// The Option class implements each option as specified by the UCI protocol
 class Option {

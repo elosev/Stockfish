@@ -159,11 +159,8 @@ bool Option::operator==(const char* s) const {
 /// operator<<() inits options and assigns idx in the correct printing order
 
 void Option::operator<<(const Option& o) {
-
-  static size_t insert_order = 0;
-
   *this = o;
-  idx = insert_order++;
+  idx = o.threads()->options()->insert_order++;
 }
 
 
