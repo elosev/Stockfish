@@ -29,7 +29,6 @@
 #include "movepick.h"
 #include "position.h"
 #include "search.h"
-#include "thread_win32_osx.h"
 
 namespace Stockfish {
 
@@ -72,7 +71,6 @@ class Thread {
   std::condition_variable cv;
   size_t idx;
   bool exit = false, searching = true; // Set before starting std::thread
-  NativeThread stdThread;
   ThreadPool *_threads;
 public:
   explicit Thread(ThreadPool*, size_t);
@@ -99,6 +97,9 @@ public:
   ButterflyHistory mainHistory;
   CapturePieceToHistory captureHistory;
   ContinuationHistory continuationHistory[2][2];
+private:
+  //thread should the the last member initialized 
+  std::thread stdThread;
 };
 
 
