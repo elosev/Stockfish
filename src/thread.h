@@ -29,6 +29,7 @@
 #include "movepick.h"
 #include "position.h"
 #include "search.h"
+#include "thread_win32_osx.h"
 
 namespace Stockfish {
 
@@ -99,7 +100,7 @@ public:
   ContinuationHistory continuationHistory[2][2];
 private:
   //thread should the the last member initialized 
-  std::thread stdThread;
+  NativeThread stdThread;
 };
 
 

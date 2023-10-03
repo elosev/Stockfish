@@ -40,7 +40,6 @@ void* start_routine(void* ptr)
 {
    P* p = reinterpret_cast<P*>(ptr);
    (p->first->*(p->second))(); // Call member function pointer
-   delete p;
    return nullptr;
 }
 
