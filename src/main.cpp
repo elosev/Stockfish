@@ -45,8 +45,26 @@ typedef std::basic_ifstream2<char, std::char_traits<char>> ifstream2;
 typedef std::basic_filebuf2<char, std::char_traits<char>> filebuf2;
 
 extern "C" int stockfish_thread_wrapper(int pipe_in, int pipe_out, int argc, char* argv[]) {
-  //new variables
-  ThreadIoStreams io(&std::cin, &std::cout);
+  //as the call is reusing global cin and cout making sure that we have only one instance of this function
+  //running at a time. Fixing this requires geting rid of global cin/cout and pasing cin/cout to all 
+  //stockfish functions 
+  static std::mutex mtx;
+  //true, if Bitboards have been initialized
+  static bool bitboards_initialized= false;
+
+
+  //fstream2 is a modified version of fstream which supports reads from pipe
+  //it is done by hardcoding behaviour of underflow to consume the pipe one byte at a time
+  //as otherwise fread blocks if it is requesting more bytes than the pipe has
+  ifstream2 fin;
+  ofstream2 fout;
+
+  fin.__open(pipe_in, std::ios::in);
+  fout.__open(pipe_out, std::ios::out);
+
+
+  ///----
+  ThreadIoStreams io(&fin, &fout);
   Eval::NNUE::NNUELoader nnue;
   CommandLine cli;
   PSQT psqt;
@@ -60,44 +78,21 @@ extern "C" int stockfish_thread_wrapper(int pipe_in, int pipe_out, int argc, cha
   ThreadPool threads(&Time, &Options, &TT, &Limits, &tb, &ptb, &search, &psqt, &cli, &nnue, &io); // Global object
   Tune tune(&threads);
 
-  //end
-  static std::mutex mtx;
-  static bool options_initialized = false;
-
-  const std::lock_guard<std::mutex> lock(mtx);
-
-  //NOTE: this can be local or global, cin and cout will be broken upon returning from this function
-  //fixing in requires major refactoring, replacing cin/cout with local streams and passing cin/cout to all functions using them.
-  //This approach works as far as there is only one instance of stockfish in the application at time
-  filebuf2 fin_rdbuf;
-  filebuf2 fout_rdbuf;
-
-  fin_rdbuf.__open(pipe_in, std::ios::in);
-  fout_rdbuf.__open(pipe_out, std::ios::out);
-
-  std::streambuf *cin_old = std::cin.rdbuf();
-  std::streambuf *cout_old = std::cout.rdbuf();
-
-
-  std::cin.rdbuf(&fin_rdbuf);
-  std::cout.rdbuf(&fout_rdbuf);
-
-  printf("##0\n");
-
-  std::cout << engine_info() << std::endl;
-
-  printf("##1\n");
-
-  cli.init(argc, argv);
-  if (!options_initialized) {
-    UCI::init(Options, &threads);
-    options_initialized = true;
+  //call this once, it initalizes constant structure
+  {
+    std::unique_lock<std::mutex> lock(mtx);
+    if (!bitboards_initialized) {
+      Bitboards::init();
+    }
+    bitboards_initialized = true;
   }
 
-  //elosev: calling this after options are initialized (see tune.h)
-  //call this once, it initalizes constant structure
-  Bitboards::init();
 
+  *io.out() << engine_info() << std::endl;
+  cli.init(argc, argv);
+  UCI::init(Options, &threads);
+
+  //elosev: calling this after options are initialized (see tune.h)
   tune.init();
   psqt.init();
   ptb.init();
@@ -105,21 +100,9 @@ extern "C" int stockfish_thread_wrapper(int pipe_in, int pipe_out, int argc, cha
   search.clear(&threads); // After threads are up
   nnue.init(&threads);
 
-  printf("##4\n");
   UCI::loop(argc, argv, &threads);
-  printf("##5\n");
 
   threads.set(0);
-  printf("##6\n");
-
-
-  std::cin.rdbuf(cin_old);
-  std::cout.rdbuf(cout_old);
-  std::cout << "##7" << std::endl;
-
-  fin_rdbuf.close();
-  fout_rdbuf.close();
-
   return 0;
 }
 
@@ -191,6 +174,8 @@ int pipe_wrapper(int argc, char* argv[]) {
 
 
   file_in << "uci" << std::endl;
+  file_in << "setoption name Threads value 5" << std::endl;
+  file_in << "go movetime 3500" << std::endl;
   file_in << "quit" << std::endl;
 
 
@@ -209,14 +194,42 @@ int pipe_wrapper(int argc, char* argv[]) {
   return 0;
 }
 
-/*int main(int argc, char* argv[]) {
-  printf(">>>>>>1\n");
-  pipe_wrapper(argc, argv);
-  printf(">>>>>>2\n");
-  return pipe_wrapper(argc, argv);
-}*/
+
+void* pipe_wrapper_wrapper(void *) {
+
+  char *argv[] = { "/foo/bar" };
+
+  pipe_wrapper(1, argv);
+
+  return NULL;
+}
 
 int main(int argc, char* argv[]) {
+  printf(">>>>>>1\n");
+
+  const int thread_num = 10;
+
+  pthread_t threads[thread_num];
+
+  for (int i = 0; i < thread_num; ++i) {
+    if (pthread_create(&threads[i], NULL, pipe_wrapper_wrapper, nullptr)) {
+      printf("Cannot create thread\n");
+      return 1;
+    }
+  }
+
+  for (int i = 0; i < thread_num; ++i) {
+    if (pthread_join(threads[i], NULL)) {
+      printf("Cannot join thread!\n");
+    }
+  }
+
+  printf(">>>>>>2\n");
+
+  return pipe_wrapper(argc, argv);
+}
+
+/*int main(int argc, char* argv[]) {
   //elosev: options is created before ThreadPool, but take a reference to i later in initialization.
   //It introduces circular reference, and potentially creates risks during destruction where options
   //may have reference to already deleted ThreadPool. It seems to be ok, as Options are not used
@@ -257,4 +270,4 @@ int main(int argc, char* argv[]) {
 
   threads.set(0);
   return 0;
-}
+}*/
