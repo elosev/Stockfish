@@ -73,6 +73,24 @@ inline Square operator^(Square s, int i) { return Square(int(s) ^ i); }
 constexpr std::string_view PieceToChar = " PNBRQK  pnbrqk";
 
 
+//forward declaring  functions to avoid warnings
+struct PairsData;
+template<TBType Type> struct TBTable;
+using Sym = uint16_t; // Huffman symbol
+
+int off_A1H8(Square sq);
+int decompress_pairs(PairsData* d, uint64_t idx);
+WDLScore map_score(TBTable<WDL>*, File, int value, WDLScore);
+int map_score(TBTable<DTZ>* entry, File f, int value, WDLScore wdl);
+bool check_dtz_stm(TBTable<WDL>*, int, File);
+bool check_dtz_stm(TBTable<DTZ>* entry, int stm, File f);
+int dtz_before_zeroing(WDLScore wdl);
+uint8_t set_symlen(PairsData* d, Sym s, std::vector<bool>& visited);
+uint8_t* set_sizes(PairsData* d, uint8_t* data);
+uint8_t* set_dtz_map(TBTable<WDL>&, uint8_t* data, File);
+uint8_t* set_dtz_map(TBTable<DTZ>& e, uint8_t* data, File maxFile);
+
+
 // Comparison function to sort leading pawns in ascending MapPawns[] order
 int off_A1H8(Square sq) { return int(rank_of(sq)) - file_of(sq); }
 
