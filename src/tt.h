@@ -86,6 +86,8 @@ class TranspositionTable {
   static constexpr int      GENERATION_MASK  = (0xFF << GENERATION_BITS) & 0xFF; // mask to pull out generation number
 
 public:
+  //initalize everything with zeros
+ TranspositionTable(): clusterCount(0), table(nullptr), generation8(0) {}
  ~TranspositionTable() { aligned_large_pages_free(table); }
   void new_search() { generation8 += GENERATION_DELTA; } // Lower bits are used for other things
   TTEntry* probe(const Key key, bool& found) const;
