@@ -40,9 +40,9 @@
 #include "search.h"
 
 using namespace Stockfish;
-typedef std::basicofstream2<char, std::char_traits<char>> ofstream2;
-typedef std::basic_ifstream2<char, std::char_traits<char>> ifstream2;
-typedef std::basic_filebuf2<char, std::char_traits<char>> filebuf2;
+typedef basicofstream2<char, std::char_traits<char>> ofstream2;
+typedef basic_ifstream2<char, std::char_traits<char>> ifstream2;
+typedef basic_filebuf2<char, std::char_traits<char>> filebuf2;
 
 extern "C" int stockfish_thread_wrapper(int pipe_in, int pipe_out, int argc, char* argv[]) {
   //as the call is reusing global cin and cout making sure that we have only one instance of this function
@@ -170,7 +170,7 @@ int pipe_wrapper(int argc, char* argv[]) {
     return 1;
   }
 
-  printf("Thread id=0x%x is ready. Reading...\n", thread_id);
+  printf("Thread id=0x%lx is ready. Reading...\n", thread_id);
 
 
   file_in << "uci" << std::endl;

@@ -59,7 +59,7 @@ public:
     basic_filebuf2* open(const std::string& __s, std::ios_base::openmode __mode);
 
 #if _LIBCPP_STD_VER >= 17
-    basic_filebuf2* open(const _VSTD_FS::path& __p, std::ios_base::openmode __mode) {
+    basic_filebuf2* open(const std::filesystem::path& __p, std::ios_base::openmode __mode) {
       return open(__p.c_str(), __mode);
     }
 #endif
@@ -966,7 +966,7 @@ public:
 #endif
     explicit basic_ifstream2(const std::string& __s, std::ios_base::openmode __mode = std::ios_base::in);
 #if _LIBCPP_STD_VER >= 17
-    explicit basic_ifstream2(const filesystem::path& __p, std::ios_base::openmode __mode = std::ios_base::in)
+    explicit basic_ifstream2(const std::filesystem::path& __p, std::ios_base::openmode __mode = std::ios_base::in)
       : basic_ifstream2(__p.c_str(), __mode) {}
 #endif // _LIBCPP_STD_VER >= 17
 #endif
@@ -986,7 +986,7 @@ public:
 #endif
     void open(const std::string& __s, std::ios_base::openmode __mode = std::ios_base::in);
 #if _LIBCPP_STD_VER >= 17
-    void open(const filesystem::path& __p,
+    void open(const std::filesystem::path& __p,
               std::ios_base::openmode __mode = std::ios_base::in) {
       return open(__p.c_str(), __mode);
     }
@@ -1167,7 +1167,7 @@ public:
     explicit basicofstream2(const std::string& __s, std::ios_base::openmode __mode = std::ios_base::out);
 
 #if _LIBCPP_STD_VER >= 17
-    explicit basicofstream2(const filesystem::path& __p, std::ios_base::openmode __mode = std::ios_base::out)
+    explicit basicofstream2(const std::filesystem::path& __p, std::ios_base::openmode __mode = std::ios_base::out)
       : basicofstream2(__p.c_str(), __mode) {}
 #endif // _LIBCPP_STD_VER >= 17
 
@@ -1188,7 +1188,7 @@ public:
     void open(const std::string& __s, std::ios_base::openmode __mode = std::ios_base::out);
 
 #if _LIBCPP_STD_VER >= 17
-    void open(const filesystem::path& __p, std::ios_base::openmode __mode = std::ios_base::out)
+    void open(const std::filesystem::path& __p, std::ios_base::openmode __mode = std::ios_base::out)
     { return open(__p.c_str(), __mode); }
 #endif // _LIBCPP_STD_VER >= 17
 
@@ -1368,7 +1368,7 @@ public:
     explicit basic_fstream(const std::string& __s, std::ios_base::openmode __mode = std::ios_base::in | std::ios_base::out);
 
 #if _LIBCPP_STD_VER >= 17
-    explicit basic_fstream(const filesystem::path& __p, std::ios_base::openmode __mode = std::ios_base::in | std::ios_base::out)
+    explicit basic_fstream(const std::filesystem::path& __p, std::ios_base::openmode __mode = std::ios_base::in | std::ios_base::out)
       : basic_fstream(__p.c_str(), __mode) {}
 #endif // _LIBCPP_STD_VER >= 17
 
@@ -1390,7 +1390,7 @@ public:
     void open(const std::string& __s, std::ios_base::openmode __mode = std::ios_base::in | std::ios_base::out);
 
 #if _LIBCPP_STD_VER >= 17
-    void open(const filesystem::path& __p, std::ios_base::openmode __mode = std::ios_base::in|std::ios_base::out)
+    void open(const std::filesystem::path& __p, std::ios_base::openmode __mode = std::ios_base::in|std::ios_base::out)
     { return open(__p.c_str(), __mode); }
 #endif // _LIBCPP_STD_VER >= 17
 
