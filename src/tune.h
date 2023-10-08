@@ -102,7 +102,7 @@ class Tune {
                   || std::is_same<T, Score>::value
                   || std::is_same<T, PostUpdate>::value, "Parameter type not supported!");
 
-    Entry(Tune *tune, const std::string& n, T& v, const SetRange& r) : EntryBase(tune), name(n), value(v), range(r) {}
+    Entry(Tune *_tune, const std::string& n, T& v, const SetRange& r) : EntryBase(_tune), name(n), value(v), range(r) {}
     void operator=(const Entry&) = delete; // Because 'value' is a reference
     void init_option() override;
     void read_option() override;
