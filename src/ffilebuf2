@@ -20,17 +20,15 @@
 #include <string.h>
 
 
-template <class _CharT, class _Traits>
 class basic_filebuf2
-    : public std::basic_streambuf<_CharT, _Traits>
+    : public std::basic_streambuf<char, std::char_traits<char>>
 {
 public:
-    typedef _CharT                           char_type;
-    typedef _Traits                          traits_type;
-    typedef typename traits_type::int_type   int_type;
-    typedef typename traits_type::pos_type   pos_type;
-    typedef typename traits_type::off_type   off_type;
-    typedef typename traits_type::state_type state_type;
+    typedef typename std::char_traits<char> traits_type;
+    typedef typename std::char_traits<char>::int_type   int_type;
+    typedef typename std::char_traits<char>::pos_type   pos_type;
+    typedef typename std::char_traits<char>::off_type   off_type;
+    typedef typename std::char_traits<char>::state_type state_type;
 
     // 27.9.1.2 Constructors/destructor:
     basic_filebuf2();
@@ -42,7 +40,7 @@ public:
     // 27.9.1.4 Members:
     bool is_open() const;
 
-    basic_filebuf2* __open(int __fd, std::ios_base::openmode __mode);
+    basic_filebuf2* __open(int fd, std::ios_base::openmode __mode);
 
     basic_filebuf2* close();
 
@@ -52,9 +50,9 @@ public:
   protected:
     // 27.9.1.5 Overridden virtual functions:
     virtual int_type underflow();
-    virtual int_type pbackfail(int_type __c = traits_type::eof());
-    virtual int_type overflow (int_type __c = traits_type::eof());
-    virtual std::basic_streambuf<char_type, traits_type>* setbuf(char_type* __s, std::streamsize __n);
+    virtual int_type pbackfail(int_type __c = std::char_traits<char>::eof());
+    virtual int_type overflow (int_type __c = std::char_traits<char>::eof());
+    virtual std::basic_streambuf<char, std::char_traits<char>>* setbuf(char* __s, std::streamsize __n);
     virtual pos_type seekoff(off_type __off, std::ios_base::seekdir __way,
                              std::ios_base::openmode __wch = std::ios_base::in | std::ios_base::out);
     virtual pos_type seekpos(pos_type __sp,
@@ -68,10 +66,11 @@ private:
   const char* __extbufend_;
   char __extbuf_min_[8];
   size_t __ebs_;
-  char_type* __intbuf_;
+  char* __intbuf_;
   size_t __ibs_;
   FILE* __file_;
-  const std::codecvt<char_type, char, state_type>* __cv_;
+  int __fd;
+  const std::codecvt<char, char, state_type>* __cv_;
   state_type __st_;
   state_type __st_last_;
   std::ios_base::openmode __om_;
@@ -84,8 +83,7 @@ private:
   void __write_mode();
 };
 
-template <class _CharT, class _Traits>
-basic_filebuf2<_CharT, _Traits>::basic_filebuf2()
+basic_filebuf2::basic_filebuf2()
     : __extbuf_(0),
       __extbufnext_(0),
       __extbufend_(0),
@@ -102,16 +100,15 @@ basic_filebuf2<_CharT, _Traits>::basic_filebuf2()
       __owns_ib_(false),
       __always_noconv_(false)
 {
-    if (std::has_facet<std::codecvt<char_type, char, state_type> >(this->getloc()))
+    if (std::has_facet<std::codecvt<char, char, state_type> >(this->getloc()))
     {
-        __cv_ = &std::use_facet<std::codecvt<char_type, char, state_type> >(this->getloc());
+        __cv_ = &std::use_facet<std::codecvt<char, char, state_type> >(this->getloc());
         __always_noconv_ = __cv_->always_noconv();
     }
     setbuf(0, 4096);
 }
 
-template <class _CharT, class _Traits>
-basic_filebuf2<_CharT, _Traits>::~basic_filebuf2()
+basic_filebuf2::~basic_filebuf2()
 {
 #ifdef __cpp_exeptions //_LIBCPP_NO_EXCEPTIONS
     try
@@ -130,16 +127,14 @@ basic_filebuf2<_CharT, _Traits>::~basic_filebuf2()
         delete [] __intbuf_;
 }
 
-template <class _CharT, class _Traits>
 inline
 bool
-basic_filebuf2<_CharT, _Traits>::is_open() const
+basic_filebuf2::is_open() const
 {
     return __file_ != 0;
 }
 
-template <class _CharT, class _Traits>
-const char* basic_filebuf2<_CharT, _Traits>::__make_mdstring(
+const char* basic_filebuf2::__make_mdstring(
     std::ios_base::openmode __mode) {
   switch (__mode & ~std::ios_base::ate) {
   case std::ios_base::out:
@@ -177,10 +172,9 @@ const char* basic_filebuf2<_CharT, _Traits>::__make_mdstring(
   }
 }
 
-template <class _CharT, class _Traits>
-basic_filebuf2<_CharT, _Traits>*
-basic_filebuf2<_CharT, _Traits>::__open(int __fd, std::ios_base::openmode __mode) {
-  basic_filebuf2<_CharT, _Traits>* __rt = 0;
+basic_filebuf2*
+basic_filebuf2::__open(int __fd, std::ios_base::openmode __mode) {
+  basic_filebuf2* __rt = 0;
   if (__file_ == 0) {
     if (const char* __mdstr = __make_mdstring(__mode)) {
       __rt = this;
@@ -201,11 +195,10 @@ basic_filebuf2<_CharT, _Traits>::__open(int __fd, std::ios_base::openmode __mode
   return __rt;
 }
 
-template <class _CharT, class _Traits>
-basic_filebuf2<_CharT, _Traits>*
-basic_filebuf2<_CharT, _Traits>::close()
+basic_filebuf2*
+basic_filebuf2::close()
 {
-    basic_filebuf2<_CharT, _Traits>* __rt = 0;
+    basic_filebuf2* __rt = 0;
     if (__file_)
     {
         __rt = this;
@@ -220,21 +213,20 @@ basic_filebuf2<_CharT, _Traits>::close()
     return __rt;
 }
 
-template <class _CharT, class _Traits>
-typename basic_filebuf2<_CharT, _Traits>::int_type
-basic_filebuf2<_CharT, _Traits>::underflow()
+typename basic_filebuf2::int_type
+basic_filebuf2::underflow()
 {
     if (__file_ == 0)
         return traits_type::eof();
     bool __initial = __read_mode();
-    char_type __1buf;
+    char __1buf;
     if (this->gptr() == 0)
         this->setg(&__1buf, &__1buf+1, &__1buf+1);
     const size_t __unget_sz = __initial ? 0 : std::min<size_t>((this->egptr() - this->eback()) / 2, 4);
     int_type __c = traits_type::eof();
     if (this->gptr() == this->egptr())
     {
-        memmove(this->eback(), this->egptr() - __unget_sz, __unget_sz * sizeof(char_type));
+        memmove(this->eback(), this->egptr() - __unget_sz, __unget_sz * sizeof(char));
         if (__always_noconv_)
         {
             size_t __nmemb = static_cast<size_t>(this->egptr() - this->eback() - __unget_sz);
@@ -264,14 +256,14 @@ basic_filebuf2<_CharT, _Traits>::underflow()
                     std::__throw_bad_cast();
 
                 __extbufend_ = __extbufnext_ + __nr;
-                char_type*  __inext;
+                char*  __inext;
                 __r = __cv_->in(__st_, __extbuf_, __extbufend_, __extbufnext_,
                                        this->eback() + __unget_sz,
                                        this->eback() + __ibs_, __inext);
                 if (__r == std::codecvt_base::noconv)
                 {
-                    this->setg((char_type*)__extbuf_, (char_type*)__extbuf_,
-                                          (char_type*)const_cast<char *>(__extbufend_));
+                    this->setg((char*)__extbuf_, (char*)__extbuf_,
+                                          (char*)const_cast<char *>(__extbufend_));
                     __c = traits_type::to_int_type(*this->gptr());
                 }
                 else if (__inext != this->eback() + __unget_sz)
@@ -289,9 +281,8 @@ basic_filebuf2<_CharT, _Traits>::underflow()
     return __c;
 }
 
-template <class _CharT, class _Traits>
-typename basic_filebuf2<_CharT, _Traits>::int_type
-basic_filebuf2<_CharT, _Traits>::pbackfail(int_type __c)
+typename basic_filebuf2::int_type
+basic_filebuf2::pbackfail(int_type __c)
 {
     if (__file_ && this->eback() < this->gptr())
     {
@@ -311,16 +302,15 @@ basic_filebuf2<_CharT, _Traits>::pbackfail(int_type __c)
     return traits_type::eof();
 }
 
-template <class _CharT, class _Traits>
-typename basic_filebuf2<_CharT, _Traits>::int_type
-basic_filebuf2<_CharT, _Traits>::overflow(int_type __c)
+typename basic_filebuf2::int_type
+basic_filebuf2::overflow(int_type __c)
 {
     if (__file_ == 0)
         return traits_type::eof();
     __write_mode();
-    char_type __1buf;
-    char_type* __pb_save = this->pbase();
-    char_type* __epb_save = this->epptr();
+    char __1buf;
+    char* __pb_save = this->pbase();
+    char* __epb_save = this->epptr();
     if (!traits_type::eq_int_type(__c, traits_type::eof()))
     {
         if (this->pptr() == 0)
@@ -333,7 +323,7 @@ basic_filebuf2<_CharT, _Traits>::overflow(int_type __c)
         if (__always_noconv_)
         {
             size_t __nmemb = static_cast<size_t>(this->pptr() - this->pbase());
-            if (fwrite(this->pbase(), sizeof(char_type), __nmemb, __file_) != __nmemb) {
+            if (fwrite(this->pbase(), sizeof(char), __nmemb, __file_) != __nmemb) {
                 return traits_type::eof();
             } 
         }
@@ -346,7 +336,7 @@ basic_filebuf2<_CharT, _Traits>::overflow(int_type __c)
                 if (!__cv_)
                     std::__throw_bad_cast();
 
-                const char_type* __e;
+                const char* __e;
                 __r = __cv_->out(__st_, this->pbase(), this->pptr(), __e,
                                         __extbuf_, __extbuf_ + __ebs_, __extbe);
                 if (__e == this->pbase())
@@ -364,7 +354,7 @@ basic_filebuf2<_CharT, _Traits>::overflow(int_type __c)
                         return traits_type::eof();
                     if (__r == std::codecvt_base::partial)
                     {
-                        this->setp(const_cast<char_type*>(__e), this->pptr());
+                        this->setp(const_cast<char*>(__e), this->pptr());
                         this->pbump(this->epptr() - this->pbase());
                     }
                 }
@@ -377,9 +367,8 @@ basic_filebuf2<_CharT, _Traits>::overflow(int_type __c)
     return traits_type::not_eof(__c);
 }
 
-template <class _CharT, class _Traits>
-std::basic_streambuf<_CharT, _Traits>*
-basic_filebuf2<_CharT, _Traits>::setbuf(char_type* __s, std::streamsize __n)
+std::basic_streambuf<char, std::char_traits<char>>*
+basic_filebuf2::setbuf(char* __s, std::streamsize __n)
 {
     this->setg(0, 0, 0);
     this->setp(0, 0);
@@ -417,7 +406,7 @@ basic_filebuf2<_CharT, _Traits>::setbuf(char_type* __s, std::streamsize __n)
         }
         else
         {
-            __intbuf_ = new char_type[__ibs_];
+            __intbuf_ = new char[__ibs_];
             __owns_ib_ = true;
         }
     }
@@ -430,9 +419,8 @@ basic_filebuf2<_CharT, _Traits>::setbuf(char_type* __s, std::streamsize __n)
     return this;
 }
 
-template <class _CharT, class _Traits>
-typename basic_filebuf2<_CharT, _Traits>::pos_type
-basic_filebuf2<_CharT, _Traits>::seekoff(off_type __off, std::ios_base::seekdir __way,
+typename basic_filebuf2::pos_type
+basic_filebuf2::seekoff(off_type __off, std::ios_base::seekdir __way,
                                         std::ios_base::openmode)
 {
     if (!__cv_)
@@ -470,9 +458,8 @@ basic_filebuf2<_CharT, _Traits>::seekoff(off_type __off, std::ios_base::seekdir 
     return __r;
 }
 
-template <class _CharT, class _Traits>
-typename basic_filebuf2<_CharT, _Traits>::pos_type
-basic_filebuf2<_CharT, _Traits>::seekpos(pos_type __sp, std::ios_base::openmode)
+typename basic_filebuf2::pos_type
+basic_filebuf2::seekpos(pos_type __sp, std::ios_base::openmode)
 {
     if (__file_ == 0 || sync())
         return pos_type(off_type(-1));
@@ -487,9 +474,8 @@ basic_filebuf2<_CharT, _Traits>::seekpos(pos_type __sp, std::ios_base::openmode)
     return __sp;
 }
 
-template <class _CharT, class _Traits>
 int
-basic_filebuf2<_CharT, _Traits>::sync()
+basic_filebuf2::sync()
 {
     if (__file_ == 0)
         return 0;
@@ -556,12 +542,11 @@ basic_filebuf2<_CharT, _Traits>::sync()
     return 0;
 }
 
-template <class _CharT, class _Traits>
 void
-basic_filebuf2<_CharT, _Traits>::imbue(const std::locale& __loc)
+basic_filebuf2::imbue(const std::locale& __loc)
 {
     sync();
-    __cv_ = &std::use_facet<std::codecvt<char_type, char, state_type> >(__loc);
+    __cv_ = &std::use_facet<std::codecvt<char, char, state_type> >(__loc);
     bool __old_anc = __always_noconv_;
     __always_noconv_ = __cv_->always_noconv();
     if (__old_anc != __always_noconv_)
@@ -585,7 +570,7 @@ basic_filebuf2<_CharT, _Traits>::imbue(const std::locale& __loc)
             if (!__owns_eb_ && __extbuf_ != __extbuf_min_)
             {
                 __ibs_ = __ebs_;
-                __intbuf_ = (char_type*)__extbuf_;
+                __intbuf_ = (char*)__extbuf_;
                 __owns_ib_ = false;
                 __extbuf_ = new char[__ebs_];
                 __owns_eb_ = true;
@@ -593,24 +578,23 @@ basic_filebuf2<_CharT, _Traits>::imbue(const std::locale& __loc)
             else
             {
                 __ibs_ = __ebs_;
-                __intbuf_ = new char_type[__ibs_];
+                __intbuf_ = new char[__ibs_];
                 __owns_ib_ = true;
             }
         }
     }
 }
 
-template <class _CharT, class _Traits>
 bool
-basic_filebuf2<_CharT, _Traits>::__read_mode()
+basic_filebuf2::__read_mode()
 {
     if (!(__cm_ & std::ios_base::in))
     {
         this->setp(0, 0);
         if (__always_noconv_)
-            this->setg((char_type*)__extbuf_,
-                       (char_type*)__extbuf_ + __ebs_,
-                       (char_type*)__extbuf_ + __ebs_);
+            this->setg((char*)__extbuf_,
+                       (char*)__extbuf_ + __ebs_,
+                       (char*)__extbuf_ + __ebs_);
         else
             this->setg(__intbuf_, __intbuf_ + __ibs_, __intbuf_ + __ibs_);
         __cm_ = std::ios_base::in;
@@ -619,9 +603,8 @@ basic_filebuf2<_CharT, _Traits>::__read_mode()
     return false;
 }
 
-template <class _CharT, class _Traits>
 void
-basic_filebuf2<_CharT, _Traits>::__write_mode()
+basic_filebuf2::__write_mode()
 {
     if (!(__cm_ & std::ios_base::out))
     {
@@ -629,8 +612,8 @@ basic_filebuf2<_CharT, _Traits>::__write_mode()
         if (__ebs_ > sizeof(__extbuf_min_))
         {
             if (__always_noconv_)
-                this->setp((char_type*)__extbuf_,
-                           (char_type*)__extbuf_ + (__ebs_ - 1));
+                this->setp((char*)__extbuf_,
+                           (char*)__extbuf_ + (__ebs_ - 1));
             else
                 this->setp(__intbuf_, __intbuf_ + (__ibs_ - 1));
         }
@@ -642,20 +625,13 @@ basic_filebuf2<_CharT, _Traits>::__write_mode()
 
 // basic_ifstream2
 
-template <class _CharT, class _Traits>
 class basic_ifstream2
-    : public std::basic_istream<_CharT, _Traits>
+    : public std::basic_istream<char, std::char_traits<char>>
 {
 public:
-    typedef _CharT                         char_type;
-    typedef _Traits                        traits_type;
-    typedef typename traits_type::int_type int_type;
-    typedef typename traits_type::pos_type pos_type;
-    typedef typename traits_type::off_type off_type;
-
     basic_ifstream2();
 
-    basic_filebuf2<char_type, traits_type>* rdbuf() const;
+    basic_filebuf2* rdbuf() const;
 
     bool is_open() const;
 
@@ -664,67 +640,54 @@ public:
     void close();
 
 private:
-    basic_filebuf2<char_type, traits_type> __sb_;
+    basic_filebuf2 __sb_;
 };
 
-template <class _CharT, class _Traits>
 inline
-basic_ifstream2<_CharT, _Traits>::basic_ifstream2()
-    : std::basic_istream<char_type, traits_type>(&__sb_)
+basic_ifstream2::basic_ifstream2()
+    : std::basic_istream<char, std::char_traits<char>>(&__sb_)
 {
 }
 
-template <class _CharT, class _Traits>
 inline
-basic_filebuf2<_CharT, _Traits>*
-basic_ifstream2<_CharT, _Traits>::rdbuf() const
+basic_filebuf2*
+basic_ifstream2::rdbuf() const
 {
-    return const_cast<basic_filebuf2<char_type, traits_type>*>(&__sb_);
+    return const_cast<basic_filebuf2*>(&__sb_);
 }
 
-template <class _CharT, class _Traits>
 inline
 bool
-basic_ifstream2<_CharT, _Traits>::is_open() const
+basic_ifstream2::is_open() const
 {
     return __sb_.is_open();
 }
 
 
-template <class _CharT, class _Traits>
-void basic_ifstream2<_CharT, _Traits>::__open(int __fd,
-                                             std::ios_base::openmode __mode) {
+void basic_ifstream2::__open(int __fd, std::ios_base::openmode __mode) {
   if (__sb_.__open(__fd, __mode | std::ios_base::in))
     this->clear();
   else
     this->setstate(std::ios_base::failbit);
 }
 
-template <class _CharT, class _Traits>
 inline
 void
-basic_ifstream2<_CharT, _Traits>::close()
+basic_ifstream2::close()
 {
     if (__sb_.close() == 0)
         this->setstate(std::ios_base::failbit);
 }
 
-// basicofstream2
+// basic_ofstream2
 
-template <class _CharT, class _Traits>
-class basicofstream2
-    : public std::basic_ostream<_CharT, _Traits>
+class basic_ofstream2
+    : public std::basic_ostream<char, std::char_traits<char>>
 {
 public:
-    typedef _CharT                         char_type;
-    typedef _Traits                        traits_type;
-    typedef typename traits_type::int_type int_type;
-    typedef typename traits_type::pos_type pos_type;
-    typedef typename traits_type::off_type off_type;
+    basic_ofstream2();
 
-    basicofstream2();
-
-    basic_filebuf2<char_type, traits_type>* rdbuf() const;
+    basic_filebuf2* rdbuf() const;
 
     bool is_open() const;
 
@@ -733,35 +696,31 @@ public:
     void close();
 
 private:
-    basic_filebuf2<char_type, traits_type> __sb_;
+    basic_filebuf2 __sb_;
 };
 
-template <class _CharT, class _Traits>
 inline
-basicofstream2<_CharT, _Traits>::basicofstream2()
-    : std::basic_ostream<char_type, traits_type>(&__sb_)
+basic_ofstream2::basic_ofstream2()
+    : std::basic_ostream<char, std::char_traits<char>>(&__sb_)
 {
 }
 
 
-template <class _CharT, class _Traits>
 inline
-basic_filebuf2<_CharT, _Traits>*
-basicofstream2<_CharT, _Traits>::rdbuf() const
+basic_filebuf2*
+basic_ofstream2::rdbuf() const
 {
-    return const_cast<basic_filebuf2<char_type, traits_type>*>(&__sb_);
+    return const_cast<basic_filebuf2*>(&__sb_);
 }
 
-template <class _CharT, class _Traits>
 inline
 bool
-basicofstream2<_CharT, _Traits>::is_open() const
+basic_ofstream2::is_open() const
 {
     return __sb_.is_open();
 }
 
-template <class _CharT, class _Traits>
-void basicofstream2<_CharT, _Traits>::__open(int __fd,
+void basic_ofstream2::__open(int __fd,
                                              std::ios_base::openmode __mode) {
   if (__sb_.__open(__fd, __mode | std::ios_base::out))
     this->clear();
@@ -769,10 +728,9 @@ void basicofstream2<_CharT, _Traits>::__open(int __fd,
     this->setstate(std::ios_base::failbit);
 }
 
-template <class _CharT, class _Traits>
 inline
 void
-basicofstream2<_CharT, _Traits>::close()
+basic_ofstream2::close()
 {
     if (__sb_.close() == 0)
         this->setstate(std::ios_base::failbit);
