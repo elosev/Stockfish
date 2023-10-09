@@ -58,7 +58,6 @@ private:
   char __extbuf_min_[8];
   size_t __ebs_;
   int __fd_;
-  std::ios_base::openmode __om_;
   std::ios_base::openmode __cm_;
   bool __owns_eb_;
 
@@ -70,7 +69,6 @@ basic_filebuf2::basic_filebuf2()
     : __extbuf_(0),
       __ebs_(0),
       __fd_(0),
-      __om_((std::ios_base::openmode)0),
       __cm_((std::ios_base::openmode)0),
       __owns_eb_(false)
 {
@@ -129,9 +127,6 @@ basic_filebuf2::underflow()
     if (__fd_ == 0)
         return traits_type::eof();
     bool __initial = __read_mode();
-    char __1buf;
-    if (this->gptr() == 0)
-        this->setg(&__1buf, &__1buf+1, &__1buf+1);
     const size_t __unget_sz = __initial ? 0 : std::min<size_t>((this->egptr() - this->eback()) / 2, 4);
     int_type __c = traits_type::eof();
     if (this->gptr() == this->egptr())
@@ -149,8 +144,6 @@ basic_filebuf2::underflow()
     }
     else
         __c = traits_type::to_int_type(*this->gptr());
-    if (this->eback() == &__1buf)
-        this->setg(0, 0, 0);
     return __c;
 }
 
@@ -160,13 +153,10 @@ basic_filebuf2::overflow(int_type __c)
     if (__fd_ == 0)
         return traits_type::eof();
     __write_mode();
-    char __1buf;
     char* __pb_save = this->pbase();
     char* __epb_save = this->epptr();
     if (!traits_type::eq_int_type(__c, traits_type::eof()))
     {
-        if (this->pptr() == 0)
-            this->setp(&__1buf, &__1buf+1);
         *this->pptr() = traits_type::to_char_type(__c);
         this->pbump(1);
     }
