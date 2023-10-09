@@ -117,8 +117,7 @@ basic_filebuf2::close()
     if (__fd_)
     {
         sync();
-        if (::close(__fd_))
-            __rt = 0;
+        ::close(__fd_);
         __fd_ = 0;
         setbuf(0, 0);
     }
