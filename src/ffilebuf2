@@ -114,18 +114,15 @@ basic_filebuf2::open(int fd) {
 basic_filebuf2*
 basic_filebuf2::close()
 {
-    basic_filebuf2* __rt = 0;
     if (__fd_)
     {
-        __rt = this;
-        if (sync())
-            __rt = 0;
+        sync();
         if (::close(__fd_))
             __rt = 0;
         __fd_ = 0;
         setbuf(0, 0);
     }
-    return __rt;
+    return this;
 }
 
 typename basic_filebuf2::int_type
