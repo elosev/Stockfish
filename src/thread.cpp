@@ -129,15 +129,15 @@ void ThreadPool::set(size_t requested) {
       main()->wait_for_search_finished();
 
       while (threads.size() > 0)
-          delete threads.back(), threads.pop_back();
+          threads.pop_back();
   }
 
   if (requested > 0)   // create new thread(s)
   {
-      threads.push_back(new MainThread(this, 0));
+      threads.push_back(std::make_unique<MainThread>(this, 0));
 
       while (threads.size() < requested)
-          threads.push_back(new Thread(this, threads.size()));
+          threads.push_back(std::make_unique<Thread>(this, threads.size()));
       clear();
 
       // Reallocate the hash with the new threadpool size
@@ -153,8 +153,8 @@ void ThreadPool::set(size_t requested) {
 
 void ThreadPool::clear() {
 
-  for (Thread* th : threads)
-      th->clear();
+  for (const std::unique_ptr<Thread>& th : threads)
+    th->clear();
 
   main()->callsCnt = 0;
   main()->bestPreviousScore = VALUE_INFINITE;
@@ -197,12 +197,12 @@ void ThreadPool::start_thinking(Position& pos, StateListPtr& states,
   // be deduced from a fen string, so set() clears them and they are set from
   // setupStates->back() later. The rootState is per thread, earlier states are shared
   // since they are read-only.
-  for (Thread* th : threads)
+  for (const std::unique_ptr<Thread>& th : threads)
   {
       th->nodes = th->tbHits = th->nmpMinPly = th->bestMoveChanges = 0;
       th->rootDepth = th->completedDepth = 0;
       th->rootMoves = rootMoves;
-      th->rootPos.set(pos.fen(), pos.is_chess960(), &th->rootState, th);
+      th->rootPos.set(pos.fen(), pos.is_chess960(), &th->rootState, th.get());
       th->rootState = setupStates->back();
   }
 
@@ -211,12 +211,12 @@ void ThreadPool::start_thinking(Position& pos, StateListPtr& states,
 
 Thread* ThreadPool::get_best_thread() const {
 
-    Thread* bestThread = threads.front();
+    Thread* bestThread = threads.front().get();
     std::map<Move, int64_t> votes;
     Value minScore = VALUE_NONE;
 
     // Find minimum score of all threads
-    for (Thread* th: threads)
+    for (const std::unique_ptr<Thread>& th : threads)
         minScore = std::min(minScore, th->rootMoves[0].score);
 
     // Vote according to score and depth, and select the best thread
@@ -224,23 +224,23 @@ Thread* ThreadPool::get_best_thread() const {
             return (th->rootMoves[0].score - minScore + 14) * int(th->completedDepth);
         };
 
-    for (Thread* th : threads)
-        votes[th->rootMoves[0].pv[0]] += thread_value(th);
+    for (const std::unique_ptr<Thread>& th : threads)
+        votes[th->rootMoves[0].pv[0]] += thread_value(th.get());
 
-    for (Thread* th : threads)
+    for (const std::unique_ptr<Thread>& th : threads)
         if (abs(bestThread->rootMoves[0].score) >= VALUE_TB_WIN_IN_MAX_PLY)
         {
             // Make sure we pick the shortest mate / TB conversion or stave off mate the longest
             if (th->rootMoves[0].score > bestThread->rootMoves[0].score)
-                bestThread = th;
+                bestThread = th.get();
         }
         else if (   th->rootMoves[0].score >= VALUE_TB_WIN_IN_MAX_PLY
                  || (   th->rootMoves[0].score > VALUE_TB_LOSS_IN_MAX_PLY
                      && (   votes[th->rootMoves[0].pv[0]] > votes[bestThread->rootMoves[0].pv[0]]
                          || (   votes[th->rootMoves[0].pv[0]] == votes[bestThread->rootMoves[0].pv[0]]
-                             &&   thread_value(th) * int(th->rootMoves[0].pv.size() > 2)
+                             &&   thread_value(th.get()) * int(th->rootMoves[0].pv.size() > 2)
                                 > thread_value(bestThread) * int(bestThread->rootMoves[0].pv.size() > 2)))))
-            bestThread = th;
+            bestThread = th.get();
 
     return bestThread;
 }
@@ -250,7 +250,7 @@ Thread* ThreadPool::get_best_thread() const {
 
 void ThreadPool::start_searching() {
 
-    for (Thread* th : threads)
+    for (const std::unique_ptr<Thread>& th : threads)
         if (th != threads.front())
             th->start_searching();
 }
@@ -260,7 +260,7 @@ void ThreadPool::start_searching() {
 
 void ThreadPool::wait_for_search_finished() const {
 
-    for (Thread* th : threads)
+    for (const std::unique_ptr<Thread>& th : threads)
         if (th != threads.front())
             th->wait_for_search_finished();
 }

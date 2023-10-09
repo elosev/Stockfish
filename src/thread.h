@@ -157,11 +157,12 @@ struct ThreadPool {
       Eval::NNUE::NNUELoader *nnue, ThreadIoStreams *io) 
     : _skills_rng(now()),_time(time), _options(options), _tt(tt), _limits(limits), _tb(tb), _ptb(ptb),
     _search(search), _psqt(psqt), _cli(cli), _nnue(nnue), _io(io) {}
+
   void start_thinking(Position&, StateListPtr&, const Search::LimitsType&, bool = false);
   void clear();
   void set(size_t);
 
-  MainThread* main()        const { return static_cast<MainThread*>(threads.front()); }
+  MainThread* main()        const { return static_cast<MainThread*>(threads.front().get()); }
   uint64_t nodes_searched() const { return accumulate(&Thread::nodes); }
   uint64_t tb_hits()        const { return accumulate(&Thread::tbHits); }
   Thread* get_best_thread() const;
@@ -193,7 +194,7 @@ struct ThreadPool {
 
 private:
   StateListPtr setupStates;
-  std::vector<Thread*> threads;
+  std::vector<std::unique_ptr<Thread>> threads;
   PRNG _skills_rng;
   TimeManagement *_time;
   UCI::OptionsMap *_options;
@@ -210,8 +211,8 @@ private:
   uint64_t accumulate(std::atomic<uint64_t> Thread::* member) const {
 
     uint64_t sum = 0;
-    for (Thread* th : threads)
-        sum += (th->*member).load(std::memory_order_relaxed);
+    for (const std::unique_ptr<Thread>& th : threads)
+        sum += (th.get()->*member).load(std::memory_order_relaxed);
     return sum;
   }
 };

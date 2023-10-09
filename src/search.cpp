@@ -444,7 +444,7 @@ void Thread::search() {
           skill.pick_best(multiPV, threads());
 
       // Use part of the gained time from a previous stable move for the current move
-      for (Thread* th : *threads())
+      for (const std::unique_ptr<Thread>& th : *threads())
       {
           totBestMoveChanges += th->bestMoveChanges;
           th->bestMoveChanges = 0;
