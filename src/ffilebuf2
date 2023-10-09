@@ -56,14 +56,9 @@ public:
 
 private:
   char* __extbuf_;
-  const char* __extbufnext_;
-  const char* __extbufend_;
   char __extbuf_min_[8];
   size_t __ebs_;
   int __fd_;
-  const std::codecvt<char, char, state_type>* __cv_;
-  state_type __st_;
-  state_type __st_last_;
   std::ios_base::openmode __om_;
   std::ios_base::openmode __cm_;
   bool __owns_eb_;
@@ -74,21 +69,12 @@ private:
 
 basic_filebuf2::basic_filebuf2()
     : __extbuf_(0),
-      __extbufnext_(0),
-      __extbufend_(0),
       __ebs_(0),
       __fd_(0),
-      __cv_(nullptr),
-      __st_(),
-      __st_last_(),
       __om_((std::ios_base::openmode)0),
       __cm_((std::ios_base::openmode)0),
       __owns_eb_(false)
 {
-    if (std::has_facet<std::codecvt<char, char, state_type> >(this->getloc()))
-    {
-        __cv_ = &std::use_facet<std::codecvt<char, char, state_type> >(this->getloc());
-    }
     setbuf(0, 4096);
 }
 
@@ -222,10 +208,8 @@ basic_filebuf2::overflow(int_type __c)
 }
 
 std::basic_streambuf<char, std::char_traits<char>>*
-basic_filebuf2::setbuf(char* __s, std::streamsize __n)
+basic_filebuf2::setbuf(char*, std::streamsize __n)
 {
-    assert(__s == 0);
-
     this->setg(0, 0, 0);
     this->setp(0, 0);
     if (__owns_eb_)
@@ -233,21 +217,14 @@ basic_filebuf2::setbuf(char* __s, std::streamsize __n)
     __ebs_ = __n;
     if (__ebs_ > sizeof(__extbuf_min_))
     {
-        if (__s)
-        {
-            __extbuf_ = (char*)__s;
-            __owns_eb_ = false;
-        }
-        else {
-            __extbuf_ = new char[__ebs_];
-            __owns_eb_ = true;
-        }
+      __extbuf_ = new char[__ebs_];
+      __owns_eb_ = true;
     }
     else
     {
-        __extbuf_ = __extbuf_min_;
-        __ebs_ = sizeof(__extbuf_min_);
-        __owns_eb_ = false;
+      __extbuf_ = __extbuf_min_;
+      __ebs_ = sizeof(__extbuf_min_);
+      __owns_eb_ = false;
     }
 
     return this;
@@ -258,35 +235,17 @@ basic_filebuf2::sync()
 {
     if (__fd_ == 0)
         return 0;
-    if (!__cv_) 
-      std::__throw_bad_cast();
 
     if (__cm_ & std::ios_base::out)
     {
         if (this->pptr() != this->pbase())
             if (overflow() == traits_type::eof())
                 return -1;
-        std::codecvt_base::result __r;
-        do
-        {
-            char* __extbe;
-            __r = __cv_->unshift(__st_, __extbuf_, __extbuf_ + __ebs_, __extbe);
-            ssize_t __nmemb = static_cast<ssize_t>(__extbe - __extbuf_);
-            if (write(__fd_, __extbuf_,  __nmemb) != __nmemb)
-                return -1;
-        } while (__r == std::codecvt_base::partial);
-        if (__r == std::codecvt_base::error)
-            return -1;
         ::sync();
     }
     else if (__cm_ & std::ios_base::in)
     {
-        state_type __state = __st_last_;
-        bool __update_st = false;
-        if (__update_st)
-            __st_ = __state;
-        __extbufnext_ = __extbufend_ = __extbuf_;
-        this->setg(0, 0, 0);
+       this->setg(0, 0, 0);
         __cm_ = (std::ios_base::openmode)0;
     }
     return 0;
