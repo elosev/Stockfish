@@ -19,6 +19,7 @@
 #include <filesystem>
 #include <string.h>
 #include <unistd.h>
+#include <cassert>
 
 
 class basic_filebuf2
@@ -52,7 +53,6 @@ public:
     virtual int_type overflow (int_type __c = std::char_traits<char>::eof());
     virtual std::basic_streambuf<char, std::char_traits<char>>* setbuf(char* __s, std::streamsize __n);
     virtual int sync();
-    virtual void imbue(const std::locale& __loc);
 
 private:
   char* __extbuf_;
@@ -60,8 +60,6 @@ private:
   const char* __extbufend_;
   char __extbuf_min_[8];
   size_t __ebs_;
-  char* __intbuf_;
-  size_t __ibs_;
   int __fd_;
   const std::codecvt<char, char, state_type>* __cv_;
   state_type __st_;
@@ -69,8 +67,6 @@ private:
   std::ios_base::openmode __om_;
   std::ios_base::openmode __cm_;
   bool __owns_eb_;
-  bool __owns_ib_;
-  bool __always_noconv_;
 
   bool __read_mode();
   void __write_mode();
@@ -81,22 +77,17 @@ basic_filebuf2::basic_filebuf2()
       __extbufnext_(0),
       __extbufend_(0),
       __ebs_(0),
-      __intbuf_(0),
-      __ibs_(0),
       __fd_(0),
       __cv_(nullptr),
       __st_(),
       __st_last_(),
       __om_((std::ios_base::openmode)0),
       __cm_((std::ios_base::openmode)0),
-      __owns_eb_(false),
-      __owns_ib_(false),
-      __always_noconv_(false)
+      __owns_eb_(false)
 {
     if (std::has_facet<std::codecvt<char, char, state_type> >(this->getloc()))
     {
         __cv_ = &std::use_facet<std::codecvt<char, char, state_type> >(this->getloc());
-        __always_noconv_ = __cv_->always_noconv();
     }
     setbuf(0, 4096);
 }
@@ -116,8 +107,6 @@ basic_filebuf2::~basic_filebuf2()
 #endif  // _LIBCPP_NO_EXCEPTIONS
     if (__owns_eb_)
         delete [] __extbuf_;
-    if (__owns_ib_)
-        delete [] __intbuf_;
 }
 
 inline
@@ -167,51 +156,14 @@ basic_filebuf2::underflow()
     if (this->gptr() == this->egptr())
     {
         memmove(this->eback(), this->egptr() - __unget_sz, __unget_sz * sizeof(char));
-        if (__always_noconv_)
+        ssize_t __nmemb = static_cast<ssize_t>(this->egptr() - this->eback() - __unget_sz);
+        __nmemb = read(__fd_, this->eback() + __unget_sz, __nmemb);
+        if (__nmemb != 0)
         {
-            ssize_t __nmemb = static_cast<ssize_t>(this->egptr() - this->eback() - __unget_sz);
-            __nmemb = read(__fd_, this->eback() + __unget_sz, __nmemb);
-            if (__nmemb != 0)
-            {
-                this->setg(this->eback(),
-                           this->eback() + __unget_sz,
-                           this->eback() + __unget_sz + __nmemb);
-                __c = traits_type::to_int_type(*this->gptr());
-            }
-        }
-        else
-        {
-            if (__extbufend_ != __extbufnext_)
-                memmove(__extbuf_, __extbufnext_, __extbufend_ - __extbufnext_);
-            __extbufnext_ = __extbuf_ + (__extbufend_ - __extbufnext_);
-            __extbufend_ = __extbuf_ + (__extbuf_ == __extbuf_min_ ? sizeof(__extbuf_min_) : __ebs_);
-            ssize_t __nmemb = std::min(static_cast<ssize_t>(__ibs_ - __unget_sz),
-                                 static_cast<ssize_t>(__extbufend_ - __extbufnext_));
-            std::codecvt_base::result __r;
-            __st_last_ = __st_;
-            ssize_t __nr = read(__fd_, (void*) const_cast<char *>(__extbufnext_), __nmemb);
-            if (__nr != 0)
-            {
-                if (!__cv_)
-                    std::__throw_bad_cast();
-
-                __extbufend_ = __extbufnext_ + __nr;
-                char*  __inext;
-                __r = __cv_->in(__st_, __extbuf_, __extbufend_, __extbufnext_,
-                                       this->eback() + __unget_sz,
-                                       this->eback() + __ibs_, __inext);
-                if (__r == std::codecvt_base::noconv)
-                {
-                    this->setg((char*)__extbuf_, (char*)__extbuf_,
-                                          (char*)const_cast<char *>(__extbufend_));
-                    __c = traits_type::to_int_type(*this->gptr());
-                }
-                else if (__inext != this->eback() + __unget_sz)
-                {
-                    this->setg(this->eback(), this->eback() + __unget_sz, __inext);
-                    __c = traits_type::to_int_type(*this->gptr());
-                }
-            }
+          this->setg(this->eback(),
+              this->eback() + __unget_sz,
+              this->eback() + __unget_sz + __nmemb);
+          __c = traits_type::to_int_type(*this->gptr());
         }
     }
     else
@@ -260,49 +212,11 @@ basic_filebuf2::overflow(int_type __c)
     }
     if (this->pptr() != this->pbase())
     {
-        if (__always_noconv_)
-        {
-            ssize_t __nmemb = static_cast<ssize_t>(this->pptr() - this->pbase());
-            if (write(__fd_, this->pbase(), __nmemb) != __nmemb) {
-                return traits_type::eof();
-            } 
-        }
-        else
-        {
-            char* __extbe = __extbuf_;
-            std::codecvt_base::result __r;
-            do
-            {
-                if (!__cv_)
-                    std::__throw_bad_cast();
-
-                const char* __e;
-                __r = __cv_->out(__st_, this->pbase(), this->pptr(), __e,
-                                        __extbuf_, __extbuf_ + __ebs_, __extbe);
-                if (__e == this->pbase())
-                    return traits_type::eof();
-                if (__r == std::codecvt_base::noconv)
-                {
-                    ssize_t __nmemb = static_cast<ssize_t>(this->pptr() - this->pbase());
-                    if (write(__fd_, this->pbase(), __nmemb) != __nmemb)
-                        return traits_type::eof();
-                }
-                else if (__r == std::codecvt_base::ok || __r == std::codecvt_base::partial)
-                {
-                    ssize_t __nmemb = static_cast<ssize_t>(__extbe - __extbuf_);
-                    if (write(__fd_, __extbuf_,  __nmemb) != __nmemb)
-                        return traits_type::eof();
-                    if (__r == std::codecvt_base::partial)
-                    {
-                        this->setp(const_cast<char*>(__e), this->pptr());
-                        this->pbump(this->epptr() - this->pbase());
-                    }
-                }
-                else
-                    return traits_type::eof();
-            } while (__r == std::codecvt_base::partial);
-        }
-        this->setp(__pb_save, __epb_save);
+      ssize_t __nmemb = static_cast<ssize_t>(this->pptr() - this->pbase());
+      if (write(__fd_, this->pbase(), __nmemb) != __nmemb) {
+        return traits_type::eof();
+      } 
+      this->setp(__pb_save, __epb_save);
     }
     return traits_type::not_eof(__c);
 }
@@ -310,22 +224,21 @@ basic_filebuf2::overflow(int_type __c)
 std::basic_streambuf<char, std::char_traits<char>>*
 basic_filebuf2::setbuf(char* __s, std::streamsize __n)
 {
+    assert(__s == 0);
+
     this->setg(0, 0, 0);
     this->setp(0, 0);
     if (__owns_eb_)
         delete [] __extbuf_;
-    if (__owns_ib_)
-        delete [] __intbuf_;
     __ebs_ = __n;
     if (__ebs_ > sizeof(__extbuf_min_))
     {
-        if (__always_noconv_ && __s)
+        if (__s)
         {
             __extbuf_ = (char*)__s;
             __owns_eb_ = false;
         }
-        else
-        {
+        else {
             __extbuf_ = new char[__ebs_];
             __owns_eb_ = true;
         }
@@ -336,26 +249,7 @@ basic_filebuf2::setbuf(char* __s, std::streamsize __n)
         __ebs_ = sizeof(__extbuf_min_);
         __owns_eb_ = false;
     }
-    if (!__always_noconv_)
-    {
-        __ibs_ = std::max<std::streamsize>(__n, sizeof(__extbuf_min_));
-        if (__s && __ibs_ >= sizeof(__extbuf_min_))
-        {
-            __intbuf_ = __s;
-            __owns_ib_ = false;
-        }
-        else
-        {
-            __intbuf_ = new char[__ibs_];
-            __owns_ib_ = true;
-        }
-    }
-    else
-    {
-        __ibs_ = 0;
-        __intbuf_ = 0;
-        __owns_ib_ = false;
-    }
+
     return this;
 }
 
@@ -387,29 +281,8 @@ basic_filebuf2::sync()
     }
     else if (__cm_ & std::ios_base::in)
     {
-        off_type __c;
         state_type __state = __st_last_;
         bool __update_st = false;
-        if (__always_noconv_)
-            __c = this->egptr() - this->gptr();
-        else
-        {
-            int __width = __cv_->encoding();
-            __c = __extbufend_ - __extbufnext_;
-            if (__width > 0)
-                __c += __width * (this->egptr() - this->gptr());
-            else
-            {
-                if (this->gptr() != this->egptr())
-                {
-                    const int __off =  __cv_->length(__state, __extbuf_,
-                                                     __extbufnext_,
-                                                     this->gptr() - this->eback());
-                    __c += __extbufnext_ - __extbuf_ - __off;
-                    __update_st = true;
-                }
-            }
-        }
         if (__update_st)
             __st_ = __state;
         __extbufnext_ = __extbufend_ = __extbuf_;
@@ -419,48 +292,6 @@ basic_filebuf2::sync()
     return 0;
 }
 
-void
-basic_filebuf2::imbue(const std::locale& __loc)
-{
-    sync();
-    __cv_ = &std::use_facet<std::codecvt<char, char, state_type> >(__loc);
-    bool __old_anc = __always_noconv_;
-    __always_noconv_ = __cv_->always_noconv();
-    if (__old_anc != __always_noconv_)
-    {
-        this->setg(0, 0, 0);
-        this->setp(0, 0);
-        // invariant, char_type is char, else we couldn't get here
-        if (__always_noconv_)  // need to dump __intbuf_
-        {
-            if (__owns_eb_)
-                delete [] __extbuf_;
-            __owns_eb_ = __owns_ib_;
-            __ebs_ = __ibs_;
-            __extbuf_ = (char*)__intbuf_;
-            __ibs_ = 0;
-            __intbuf_ = 0;
-            __owns_ib_ = false;
-        }
-        else  // need to obtain an __intbuf_.
-        {     // If __extbuf_ is user-supplied, use it, else new __intbuf_
-            if (!__owns_eb_ && __extbuf_ != __extbuf_min_)
-            {
-                __ibs_ = __ebs_;
-                __intbuf_ = (char*)__extbuf_;
-                __owns_ib_ = false;
-                __extbuf_ = new char[__ebs_];
-                __owns_eb_ = true;
-            }
-            else
-            {
-                __ibs_ = __ebs_;
-                __intbuf_ = new char[__ibs_];
-                __owns_ib_ = true;
-            }
-        }
-    }
-}
 
 bool
 basic_filebuf2::__read_mode()
@@ -468,12 +299,9 @@ basic_filebuf2::__read_mode()
     if (!(__cm_ & std::ios_base::in))
     {
         this->setp(0, 0);
-        if (__always_noconv_)
-            this->setg((char*)__extbuf_,
-                       (char*)__extbuf_ + __ebs_,
-                       (char*)__extbuf_ + __ebs_);
-        else
-            this->setg(__intbuf_, __intbuf_ + __ibs_, __intbuf_ + __ibs_);
+        this->setg((char*)__extbuf_,
+            (char*)__extbuf_ + __ebs_,
+            (char*)__extbuf_ + __ebs_);
         __cm_ = std::ios_base::in;
         return true;
     }
@@ -488,14 +316,11 @@ basic_filebuf2::__write_mode()
         this->setg(0, 0, 0);
         if (__ebs_ > sizeof(__extbuf_min_))
         {
-            if (__always_noconv_)
-                this->setp((char*)__extbuf_,
-                           (char*)__extbuf_ + (__ebs_ - 1));
-            else
-                this->setp(__intbuf_, __intbuf_ + (__ibs_ - 1));
+          this->setp((char*)__extbuf_,
+              (char*)__extbuf_ + (__ebs_ - 1));
         }
         else
-            this->setp(0, 0);
+          this->setp(0, 0);
         __cm_ = std::ios_base::out;
     }
 }
