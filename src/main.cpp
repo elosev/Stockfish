@@ -18,7 +18,7 @@
 
 #include <iostream>
 #include <string>
-#include "fstream2"
+#include "ffilebuf2"
 #include <unistd.h>
 #include <pthread.h>
 #include <stdio.h>
@@ -40,9 +40,8 @@
 #include "search.h"
 
 using namespace Stockfish;
-typedef basicofstream2<char, std::char_traits<char>> ofstream2;
-typedef basic_ifstream2<char, std::char_traits<char>> ifstream2;
-typedef basic_filebuf2<char, std::char_traits<char>> filebuf2;
+typedef basic_ofstream2 ofstream2;
+typedef basic_ifstream2 ifstream2;
 
 extern "C" int stockfish_thread_wrapper(int pipe_in, int pipe_out, int argc, char* argv[]) {
   //as the call is reusing global cin and cout making sure that we have only one instance of this function
@@ -59,8 +58,8 @@ extern "C" int stockfish_thread_wrapper(int pipe_in, int pipe_out, int argc, cha
   ifstream2 fin;
   ofstream2 fout;
 
-  fin.__open(pipe_in, std::ios::in);
-  fout.__open(pipe_out, std::ios::out);
+  fin.open(pipe_in);
+  fout.open(pipe_out);
 
 
   ///----
@@ -151,8 +150,8 @@ int pipe_wrapper(int argc, char* argv[]) {
   ofstream2 file_in;
   ifstream2 file_out;
 
-  file_in.__open(fd_in[1], std::ios::out | std::ios::binary);
-  file_out.__open(fd_out[0], std::ios::in | std::ios::binary);
+  file_in.open(fd_in[1]);
+  file_out.open(fd_out[0]);
 
 
   if (!file_in.is_open())  {
@@ -176,6 +175,7 @@ int pipe_wrapper(int argc, char* argv[]) {
   file_in << "uci" << std::endl;
   file_in << "setoption name Threads value 5" << std::endl;
   file_in << "go movetime 3500" << std::endl;
+  sleep(5);
   file_in << "quit" << std::endl;
 
 

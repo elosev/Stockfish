@@ -18,6 +18,7 @@
 #include <cstdlib>
 #include <filesystem>
 #include <string.h>
+#include <unistd.h>
 
 
 class basic_filebuf2
@@ -40,12 +41,9 @@ public:
     // 27.9.1.4 Members:
     bool is_open() const;
 
-    basic_filebuf2* __open(int fd, std::ios_base::openmode __mode);
+    basic_filebuf2* open(int fd);
 
     basic_filebuf2* close();
-
-    inline static const char*
-    __make_mdstring(std::ios_base::openmode __mode) ;
 
   protected:
     // 27.9.1.5 Overridden virtual functions:
@@ -53,10 +51,6 @@ public:
     virtual int_type pbackfail(int_type __c = std::char_traits<char>::eof());
     virtual int_type overflow (int_type __c = std::char_traits<char>::eof());
     virtual std::basic_streambuf<char, std::char_traits<char>>* setbuf(char* __s, std::streamsize __n);
-    virtual pos_type seekoff(off_type __off, std::ios_base::seekdir __way,
-                             std::ios_base::openmode __wch = std::ios_base::in | std::ios_base::out);
-    virtual pos_type seekpos(pos_type __sp,
-                             std::ios_base::openmode __wch = std::ios_base::in | std::ios_base::out);
     virtual int sync();
     virtual void imbue(const std::locale& __loc);
 
@@ -68,8 +62,7 @@ private:
   size_t __ebs_;
   char* __intbuf_;
   size_t __ibs_;
-  FILE* __file_;
-  int __fd;
+  int __fd_;
   const std::codecvt<char, char, state_type>* __cv_;
   state_type __st_;
   state_type __st_last_;
@@ -90,7 +83,7 @@ basic_filebuf2::basic_filebuf2()
       __ebs_(0),
       __intbuf_(0),
       __ibs_(0),
-      __file_(0),
+      __fd_(0),
       __cv_(nullptr),
       __st_(),
       __st_last_(),
@@ -131,83 +124,30 @@ inline
 bool
 basic_filebuf2::is_open() const
 {
-    return __file_ != 0;
-}
-
-const char* basic_filebuf2::__make_mdstring(
-    std::ios_base::openmode __mode) {
-  switch (__mode & ~std::ios_base::ate) {
-  case std::ios_base::out:
-  case std::ios_base::out | std::ios_base::trunc:
-    return "w" ;
-  case std::ios_base::out | std::ios_base::app:
-  case std::ios_base::app:
-    return "a" ;
-  case std::ios_base::in:
-    return "r" ;
-  case std::ios_base::in | std::ios_base::out:
-    return "r+" ;
-  case std::ios_base::in | std::ios_base::out | std::ios_base::trunc:
-    return "w+" ;
-  case std::ios_base::in | std::ios_base::out | std::ios_base::app:
-  case std::ios_base::in | std::ios_base::app:
-    return "a+" ;
-  case std::ios_base::out | std::ios_base::binary:
-  case std::ios_base::out | std::ios_base::trunc | std::ios_base::binary:
-    return "wb" ;
-  case std::ios_base::out | std::ios_base::app | std::ios_base::binary:
-  case std::ios_base::app | std::ios_base::binary:
-    return "ab" ;
-  case std::ios_base::in | std::ios_base::binary:
-    return "rb" ;
-  case std::ios_base::in | std::ios_base::out | std::ios_base::binary:
-    return "r+b" ;
-  case std::ios_base::in | std::ios_base::out | std::ios_base::trunc | std::ios_base::binary:
-    return "w+b" ;
-  case std::ios_base::in | std::ios_base::out | std::ios_base::app | std::ios_base::binary:
-  case std::ios_base::in | std::ios_base::app | std::ios_base::binary:
-    return "a+b" ;
-  default:
-    return nullptr;
-  }
+    return __fd_ != 0;
 }
 
 basic_filebuf2*
-basic_filebuf2::__open(int __fd, std::ios_base::openmode __mode) {
-  basic_filebuf2* __rt = 0;
-  if (__file_ == 0) {
-    if (const char* __mdstr = __make_mdstring(__mode)) {
-      __rt = this;
-      __file_ = fdopen(__fd, __mdstr);
-      if (__file_) {
-        __om_ = __mode;
-        if (__mode & std::ios_base::ate) {
-          if (fseek(__file_, 0, SEEK_END)) {
-            fclose(__file_);
-            __file_ = 0;
-            __rt = 0;
-          }
-        }
-      } else
-        __rt = 0;
-    }
+basic_filebuf2::open(int fd) {
+  if (__fd_ != 0) {
+    ::close(__fd_);
   }
-  return __rt;
+  __fd_ = fd;
+  return this;
 }
 
 basic_filebuf2*
 basic_filebuf2::close()
 {
     basic_filebuf2* __rt = 0;
-    if (__file_)
+    if (__fd_)
     {
         __rt = this;
-        std::unique_ptr<FILE, int(*)(FILE*)> __h(__file_, fclose);
         if (sync())
             __rt = 0;
-        if (fclose(__h.release()))
+        if (::close(__fd_))
             __rt = 0;
-        __file_ = 0;
+        __fd_ = 0;
         setbuf(0, 0);
     }
     return __rt;
@@ -216,7 +156,7 @@ basic_filebuf2::close()
 typename basic_filebuf2::int_type
 basic_filebuf2::underflow()
 {
-    if (__file_ == 0)
+    if (__fd_ == 0)
         return traits_type::eof();
     bool __initial = __read_mode();
     char __1buf;
@@ -229,8 +169,8 @@ basic_filebuf2::underflow()
         memmove(this->eback(), this->egptr() - __unget_sz, __unget_sz * sizeof(char));
         if (__always_noconv_)
         {
-            size_t __nmemb = static_cast<size_t>(this->egptr() - this->eback() - __unget_sz);
-            __nmemb = fread(this->eback() + __unget_sz, 1, 1/*__nmemb*/, __file_);
+            ssize_t __nmemb = static_cast<ssize_t>(this->egptr() - this->eback() - __unget_sz);
+            __nmemb = read(__fd_, this->eback() + __unget_sz, __nmemb);
             if (__nmemb != 0)
             {
                 this->setg(this->eback(),
@@ -245,11 +185,11 @@ basic_filebuf2::underflow()
                 memmove(__extbuf_, __extbufnext_, __extbufend_ - __extbufnext_);
             __extbufnext_ = __extbuf_ + (__extbufend_ - __extbufnext_);
             __extbufend_ = __extbuf_ + (__extbuf_ == __extbuf_min_ ? sizeof(__extbuf_min_) : __ebs_);
-            size_t __nmemb = std::min(static_cast<size_t>(__ibs_ - __unget_sz),
-                                 static_cast<size_t>(__extbufend_ - __extbufnext_));
+            ssize_t __nmemb = std::min(static_cast<ssize_t>(__ibs_ - __unget_sz),
+                                 static_cast<ssize_t>(__extbufend_ - __extbufnext_));
             std::codecvt_base::result __r;
             __st_last_ = __st_;
-            size_t __nr = fread((void*) const_cast<char *>(__extbufnext_), 1, 1/*__nmemb*/, __file_);
+            ssize_t __nr = read(__fd_, (void*) const_cast<char *>(__extbufnext_), __nmemb);
             if (__nr != 0)
             {
                 if (!__cv_)
@@ -284,7 +224,7 @@ basic_filebuf2::underflow()
 typename basic_filebuf2::int_type
 basic_filebuf2::pbackfail(int_type __c)
 {
-    if (__file_ && this->eback() < this->gptr())
+    if (__fd_ && this->eback() < this->gptr())
     {
         if (traits_type::eq_int_type(__c, traits_type::eof()))
         {
@@ -305,7 +245,7 @@ basic_filebuf2::pbackfail(int_type __c)
 typename basic_filebuf2::int_type
 basic_filebuf2::overflow(int_type __c)
 {
-    if (__file_ == 0)
+    if (__fd_ == 0)
         return traits_type::eof();
     __write_mode();
     char __1buf;
@@ -322,8 +262,8 @@ basic_filebuf2::overflow(int_type __c)
     {
         if (__always_noconv_)
         {
-            size_t __nmemb = static_cast<size_t>(this->pptr() - this->pbase());
-            if (fwrite(this->pbase(), sizeof(char), __nmemb, __file_) != __nmemb) {
+            ssize_t __nmemb = static_cast<ssize_t>(this->pptr() - this->pbase());
+            if (write(__fd_, this->pbase(), __nmemb) != __nmemb) {
                 return traits_type::eof();
             } 
         }
@@ -343,14 +283,14 @@ basic_filebuf2::overflow(int_type __c)
                     return traits_type::eof();
                 if (__r == std::codecvt_base::noconv)
                 {
-                    size_t __nmemb = static_cast<size_t>(this->pptr() - this->pbase());
-                    if (fwrite(this->pbase(), 1, __nmemb, __file_) != __nmemb)
+                    ssize_t __nmemb = static_cast<ssize_t>(this->pptr() - this->pbase());
+                    if (write(__fd_, this->pbase(), __nmemb) != __nmemb)
                         return traits_type::eof();
                 }
                 else if (__r == std::codecvt_base::ok || __r == std::codecvt_base::partial)
                 {
-                    size_t __nmemb = static_cast<size_t>(__extbe - __extbuf_);
-                    if (fwrite(__extbuf_, 1, __nmemb, __file_) != __nmemb)
+                    ssize_t __nmemb = static_cast<ssize_t>(__extbe - __extbuf_);
+                    if (write(__fd_, __extbuf_,  __nmemb) != __nmemb)
                         return traits_type::eof();
                     if (__r == std::codecvt_base::partial)
                     {
@@ -419,65 +359,10 @@ basic_filebuf2::setbuf(char* __s, std::streamsize __n)
     return this;
 }
 
-typename basic_filebuf2::pos_type
-basic_filebuf2::seekoff(off_type __off, std::ios_base::seekdir __way,
-                                        std::ios_base::openmode)
-{
-    if (!__cv_)
-      std::__throw_bad_cast();
-
-    int __width = __cv_->encoding();
-    if (__file_ == 0 || (__width <= 0 && __off != 0) || sync())
-        return pos_type(off_type(-1));
-    // __width > 0 || __off == 0
-    int __whence;
-    switch (__way)
-    {
-    case std::ios_base::beg:
-        __whence = SEEK_SET;
-        break;
-    case std::ios_base::cur:
-        __whence = SEEK_CUR;
-        break;
-    case std::ios_base::end:
-        __whence = SEEK_END;
-        break;
-    default:
-        return pos_type(off_type(-1));
-    }
-#if defined(_LIBCPP_HAS_NO_OFF_T_FUNCTIONS)
-    if (fseek(__file_, __width > 0 ? __width * __off : 0, __whence))
-        return pos_type(off_type(-1));
-    pos_type __r = ftell(__file_);
-#else
-    if (fseeko(__file_, __width > 0 ? __width * __off : 0, __whence))
-        return pos_type(off_type(-1));
-    pos_type __r = ftello(__file_);
-#endif
-    __r.state(__st_);
-    return __r;
-}
-
-typename basic_filebuf2::pos_type
-basic_filebuf2::seekpos(pos_type __sp, std::ios_base::openmode)
-{
-    if (__file_ == 0 || sync())
-        return pos_type(off_type(-1));
-#if defined(_LIBCPP_HAS_NO_OFF_T_FUNCTIONS)
-    if (fseek(__file_, __sp, SEEK_SET))
-        return pos_type(off_type(-1));
-#else
-    if (fseeko(__file_, __sp, SEEK_SET))
-        return pos_type(off_type(-1));
-#endif
-    __st_ = __sp.state();
-    return __sp;
-}
-
 int
 basic_filebuf2::sync()
 {
-    if (__file_ == 0)
+    if (__fd_ == 0)
         return 0;
     if (!__cv_) 
       std::__throw_bad_cast();
@@ -492,14 +377,13 @@ basic_filebuf2::sync()
         {
             char* __extbe;
             __r = __cv_->unshift(__st_, __extbuf_, __extbuf_ + __ebs_, __extbe);
-            size_t __nmemb = static_cast<size_t>(__extbe - __extbuf_);
-            if (fwrite(__extbuf_, 1, __nmemb, __file_) != __nmemb)
+            ssize_t __nmemb = static_cast<ssize_t>(__extbe - __extbuf_);
+            if (write(__fd_, __extbuf_,  __nmemb) != __nmemb)
                 return -1;
         } while (__r == std::codecvt_base::partial);
         if (__r == std::codecvt_base::error)
             return -1;
-        if (fflush(__file_))
-            return -1;
+        ::sync();
     }
     else if (__cm_ & std::ios_base::in)
     {
@@ -526,13 +410,6 @@ basic_filebuf2::sync()
                 }
             }
         }
-#if defined(_LIBCPP_HAS_NO_OFF_T_FUNCTIONS)
-        if (fseek(__file_, -__c, SEEK_CUR))
-            return -1;
-#else
-        if (fseeko(__file_, -__c, SEEK_CUR))
-            return -1;
-#endif
         if (__update_st)
             __st_ = __state;
         __extbufnext_ = __extbufend_ = __extbuf_;
@@ -635,7 +512,7 @@ public:
 
     bool is_open() const;
 
-    void __open(int __fd, std::ios_base::openmode __mode);
+    void open(int fd);
 
     void close();
 
@@ -664,8 +541,8 @@ basic_ifstream2::is_open() const
 }
 
 
-void basic_ifstream2::__open(int __fd, std::ios_base::openmode __mode) {
-  if (__sb_.__open(__fd, __mode | std::ios_base::in))
+void basic_ifstream2::open(int fd) {
+  if (__sb_.open(fd))
     this->clear();
   else
     this->setstate(std::ios_base::failbit);
@@ -691,7 +568,7 @@ public:
 
     bool is_open() const;
 
-    void __open(int __fd, std::ios_base::openmode __mode);
+    void open(int fd);
 
     void close();
 
@@ -720,9 +597,8 @@ basic_ofstream2::is_open() const
     return __sb_.is_open();
 }
 
-void basic_ofstream2::__open(int __fd,
-                                             std::ios_base::openmode __mode) {
-  if (__sb_.__open(__fd, __mode | std::ios_base::out))
+void basic_ofstream2::open(int fd) {
+  if (__sb_.open(fd))
     this->clear();
   else
     this->setstate(std::ios_base::failbit);
