@@ -9,7 +9,7 @@
 
 #ifndef _LIBCPP_FSTREAM22
 #define _LIBCPP_FSTREAM22
-#include <stdio.h>
+#include <cstdio>
 
 
 #include <ostream>
@@ -17,9 +17,10 @@
 #include <cstdio>
 #include <cstdlib>
 #include <filesystem>
-#include <string.h>
+#include <cstring>
 #include <unistd.h>
 #include <cassert>
+#include <vector>
 
 
 class basic_filebuf2
@@ -54,23 +55,18 @@ public:
     virtual int sync();
 
 private:
-  char* __extbuf_;
-  char __extbuf_min_[8];
-  size_t __ebs_;
   int __fd_;
   std::ios_base::openmode __cm_;
-  bool __owns_eb_;
+  std::vector<char> __buf_;
 
   bool __read_mode();
   void __write_mode();
 };
 
 basic_filebuf2::basic_filebuf2()
-    : __extbuf_(0),
-      __ebs_(0),
-      __fd_(0),
+    : __fd_(0),
       __cm_((std::ios_base::openmode)0),
-      __owns_eb_(false)
+      __buf_(8)
 {
     setbuf(0, 4096);
 }
@@ -88,8 +84,6 @@ basic_filebuf2::~basic_filebuf2()
     {
     }
 #endif  // _LIBCPP_NO_EXCEPTIONS
-    if (__owns_eb_)
-        delete [] __extbuf_;
 }
 
 inline
@@ -176,20 +170,9 @@ basic_filebuf2::setbuf(char*, std::streamsize __n)
 {
     this->setg(0, 0, 0);
     this->setp(0, 0);
-    if (__owns_eb_)
-        delete [] __extbuf_;
-    __ebs_ = __n;
-    if (__ebs_ > sizeof(__extbuf_min_))
-    {
-      __extbuf_ = new char[__ebs_];
-      __owns_eb_ = true;
-    }
-    else
-    {
-      __extbuf_ = __extbuf_min_;
-      __ebs_ = sizeof(__extbuf_min_);
-      __owns_eb_ = false;
-    }
+
+    __buf_.resize(__n);
+    __cm_= (std::ios_base::openmode)0;
 
     return this;
 }
@@ -222,9 +205,9 @@ basic_filebuf2::__read_mode()
     if (!(__cm_ & std::ios_base::in))
     {
         this->setp(0, 0);
-        this->setg((char*)__extbuf_,
-            (char*)__extbuf_ + __ebs_,
-            (char*)__extbuf_ + __ebs_);
+        this->setg(__buf_.data(),
+            __buf_.data()  + __buf_.size(),
+            __buf_.data()  + __buf_.size());
         __cm_ = std::ios_base::in;
         return true;
     }
@@ -237,13 +220,8 @@ basic_filebuf2::__write_mode()
     if (!(__cm_ & std::ios_base::out))
     {
         this->setg(0, 0, 0);
-        if (__ebs_ > sizeof(__extbuf_min_))
-        {
-          this->setp((char*)__extbuf_,
-              (char*)__extbuf_ + (__ebs_ - 1));
-        }
-        else
-          this->setp(0, 0);
+        this->setp(__buf_.data(),
+            __buf_.data()  + (__buf_.size() - 1));
         __cm_ = std::ios_base::out;
     }
 }
