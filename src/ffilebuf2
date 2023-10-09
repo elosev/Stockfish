@@ -49,7 +49,6 @@ public:
   protected:
     // 27.9.1.5 Overridden virtual functions:
     virtual int_type underflow();
-    virtual int_type pbackfail(int_type __c = std::char_traits<char>::eof());
     virtual int_type overflow (int_type __c = std::char_traits<char>::eof());
     virtual std::basic_streambuf<char, std::char_traits<char>>* setbuf(char* __s, std::streamsize __n);
     virtual int sync();
@@ -153,27 +152,6 @@ basic_filebuf2::underflow()
     if (this->eback() == &__1buf)
         this->setg(0, 0, 0);
     return __c;
-}
-
-typename basic_filebuf2::int_type
-basic_filebuf2::pbackfail(int_type __c)
-{
-    if (__fd_ && this->eback() < this->gptr())
-    {
-        if (traits_type::eq_int_type(__c, traits_type::eof()))
-        {
-            this->gbump(-1);
-            return traits_type::not_eof(__c);
-        }
-        if ((__om_ & std::ios_base::out) ||
-            traits_type::eq(traits_type::to_char_type(__c), this->gptr()[-1]))
-        {
-            this->gbump(-1);
-            *this->gptr() = traits_type::to_char_type(__c);
-            return __c;
-        }
-    }
-    return traits_type::eof();
 }
 
 typename basic_filebuf2::int_type
